@@ -1,0 +1,18 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div class="login-page">
+<div class="form">
+<h1>Search Accumulo</h1>
+
+<form action="/search" method="get">
+  <input name="f" type="text" placeholder="Field...">
+  <input name="q" type="text" placeholder="Search...">
+  <input type="submit" >
+</form>
+</div>
+</div>
+{% endblock %}

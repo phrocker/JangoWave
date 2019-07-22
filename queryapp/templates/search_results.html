@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<div align="center">
+  <p><a href="{% url 'logout' %}">logout</a></p>
+<h1>Search Results</h1>
+
+<form action="/search" method="get">
+  <input name="f" type="text" value="{{ field }}">
+  <input name="q" type="text" value="{{ query }}">
+  <input type="submit" >
+</form>
+</div>
+</br>
+<ul>
+query took {{ time }} ms
+  {% for result in results %}
+<table style="width:100%">
+     <!-- {{ result }}<!-->
+  <pre id="json">{{ result }}</pre>
+</table>
+{% endfor %}
+</ul>
+<div align="center">
+{% if prv %}
+  <a href="{{prv}}"><< </a>
+  {% if nxt %}
+    | <a href="{{nxt}}"> >> </a>
+  {% endif %}
+{% else %}
+{% if nxt %}
+     <a href="{{nxt}}"> >> </a>
+  {% endif %}
+{% endif %}
+</div>
+{% endblock %}
