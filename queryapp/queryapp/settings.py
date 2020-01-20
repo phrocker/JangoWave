@@ -25,12 +25,16 @@ SECRET_KEY = 'nti&=qe0wwhdq^rubpafqh78a9@mrpg+tr6)ytua=v968qkw5-'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["::1","localhost"]
+ALLOWED_HOSTS = ["::1","localhost","10.1.0.68","mycluster-workers-41"]
 
 
 # Application definition
 
 INSTALLED_APPS = [
+ # General use templates & template tags (should appear first)
+    'adminlte3',
+     # Optional: Django admin theme (must be before django.contrib.admin)
+    'adminlte3_theme', 
     'django_slick_admin',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -120,6 +124,9 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.0/howto/static-files/
+LOGOUT_URL ='/accounts/logout/'
 LOGIN_REDIRECT_URL = 'home'
 LOGOUT_REDIRECT_URL = 'home'
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(PROJECT_ROOT, 'static')

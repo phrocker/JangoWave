@@ -1,10 +1,12 @@
 {% extends 'base.html' %}
 
-{% block title %}Login{% endblock %}
+
+
+{% block title %}Djangowave Search{% endblock %}
 
 {% block content %}
+
 <div align="center">
-  <p><a href="{% url 'logout' %}">logout</a></p>
 <h1>Search Results</h1>
 
 <form action="/search" method="get">
@@ -12,17 +14,15 @@
   <input name="q" type="text" value="{{ query }}">
   <input type="submit" >
 </form>
-</div>
-</br>
-<ul>
 query took {{ time }} ms
-  {% for result in results %}
+</div>
+ {% for result in results %}
 <table style="width:100%">
-     <!-- {{ result }}<!-->
+   <!-- {{ result }}<!-->
   <pre id="json">{{ result }}</pre>
+  
 </table>
 {% endfor %}
-</ul>
 <div align="center">
 {% if prv %}
   <a href="{{prv}}"><< </a>

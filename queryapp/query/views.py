@@ -166,5 +166,5 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
         prv="/search/?f=" + field + "&q=" + entry + "&s=" + str(rd)
       if counts > (10+skip):
         nxt="/search/?f=" + field + "&q=" + entry + "&s=" + str(counts-1)
-      return render_to_response('search_results.html', {'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field,'query': entry})
+      return render_to_response('search_results.html', {'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'authenticated':True,'query': entry})
 # Create your views here.
