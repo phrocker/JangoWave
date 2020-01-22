@@ -2,18 +2,8 @@ from org.poma.accumulo import Key,KeyValue
 from org.apache.accumulo.core.data import Range,Value
 from org.apache.hadoop.io import WritableUtils
 from java.io import ByteArrayInputStream, DataInputStream
-import struct
+from java.lang import Long
 import json
-
-
-#def swap32(i):
-#    return struct.unpack("<L", struct.pack(">L", i))[0]
-
-def swap32(x):
-    return (((x << 24) & 0xFF000000) |
-            ((x <<  8) & 0x00FF0000) |
-            ((x >>  8) & 0x0000FF00) |
-            ((x >> 24) & 0x000000FF))
 
 class MetadataCounter: 
 ## This example iterator assumes the CQ contains a field name
@@ -34,8 +24,7 @@ class MetadataCounter:
         if value.getSize() > 0:
           bs = ByteArrayInputStream(value.get())
           ds = DataInputStream(bs)   
-          size = str( swap32( WritableUtils.readVLong( ds ) ))
-#          size = str( WritableUtils.readVLong( ds ) )
+          size = Long( WritableUtils.readVLong( ds ) ).toString()
         newval = Value(size)
         kv = KeyValue(key,newval)
         iterator.next()
