@@ -2,21 +2,46 @@
 
 
 
-{% block title %}Djangowave Search{% endblock %}
+{% block title %}Jangowave Search{% endblock %}
 
 {% block content %}
 
 <div align="center">
 <h1>Search Results</h1>
-
+query took {{ time }} ms
 <form action="/search" method="get">
   <input name="f" type="text" value="{{ field }}">
   <input name="q" type="text" value="{{ query }}">
+
+  <br /> Authorizations:<br />
+<!-- <select multiple name="auths"> -->
+{% for auth in userAuths %}{{auth}}
+<input type="checkbox" name="auths" value="{{auth}}" 
+
+{% for a in selectedauths %}
+{% if a|stringformat:"s" == auth|stringformat:"s" %}
+  checked
+  {% endif %}
+{% endfor %}
+> 
+{% endfor %}
+<br />
   <input type="submit" >
 </form>
-query took {{ time }} ms
 </div>
- {% for result in results %}
+<div align="center">
+{% if prv %}
+  <a href="{{prv}}"><< </a>
+  {% if nxt %}
+    | <a href="{{nxt}}"> >> </a>
+  {% endif %}
+{% else %}
+{% if nxt %}
+     <a href="{{nxt}}"> >> </a>
+  {% endif %}
+{% endif %}
+</div>
+{% for result in results %}
 <table style="width:100%">
    <!-- {{ result }}<!-->
   <pre id="json">{{ result }}</pre>

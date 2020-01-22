@@ -11,14 +11,7 @@
 <form action="/search" method="get">
   <input name="f" type="text" placeholder="Field...">
   <input name="q" type="text" placeholder="Search...">
-  Authorizations:<br>
-<select multiple name="auths">
-{% for auth in userAuths %}{{auth}}
-<option value="{{auth}}">{{auth}}</option>
-{% endfor %}
-</select>
   <input type="submit" >
-
 </form>
 </div>
 </div>
