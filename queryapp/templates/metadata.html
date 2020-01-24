@@ -8,21 +8,22 @@
 <div align="center">
 <h1>Ingest Metadata</h1>
 </div>
-<div class="card-body">
-              <table id="example2" class="table table-bordered table-hover">
+<i class="fas fa-search"></i>&nbsp;<input type="text" id="myInput" onkeyup="fieldMetadataSearch()" placeholder="Search field metadata...">
+<div class="table-responsive-sm">
+              <table data-toggle="table" id="fieldMetadata" data-sort-name="date" data-sort-order="desc"  class=" table-hover table table-bordered table-dark">
                 <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Field Name</th>
-                  <th>Count</th>
+                  <th data-sortable="true" data-field="date">Date</th>
+                  <th data-sortable="true" data-field="fieldname">Field Name</th>
+                  <th data-sortable="true" data-field="count">Count</th>
                 </tr>
                 </thead>
                 <tbody>
 {% for key, value in metadata.items %}
       {% for key2,value2 in value.items %}
         <tr>
-                  <td>{{key}}</td>
-                  <td>{{key2}}</td>
+                  <td><a href="/metadata?q={{key2}}&date={{key}}">{{key}}</a></td>
+                  <td><a href="/metadata?q={{key2}}">{{key2}}</a></td>
                   <td>{{value2}}</td>
                 </tr>
       {% endfor %}
