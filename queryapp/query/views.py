@@ -14,14 +14,14 @@ import Uid_pb2
 import time
 import json
 from django.http import JsonResponse
-
-
-
+from concurrent.futures import ThreadPoolExecutor
+#from multiprocessing import Queue
+import multiprocessing
 # cities/views.py
 from django.views.generic import TemplateView, ListView, View
 
 from stronghold.views import StrongholdPublicMixin
-
+import threading
 
 from .models import Query
 from .models import UserAuths
@@ -40,11 +40,28 @@ import concurrent.futures
 
 resolver = UnknownOperationResolver()
 
-
+import faulthandler
+faulthandler.enable()
 
 
 
 import pysharkbite
+
+
+class CancellationToken:
+   def __init__(self):
+       self._is_cancelled = threading.Event()
+       self._is_cancelled.clear()
+
+   def cancel(self):
+       print("Canceling condition",flush=True)
+       self._is_cancelled.set()
+
+   def running(self):
+       return self._is_cancelled.is_set() == False
+
+   def cancelled(self):
+       return self._is_cancelled.is_set()
 
 
 class LookupInformation(object):
@@ -93,10 +110,10 @@ class RangeLookup:
 class LookupIterator(object):
     def __init__(self,rangeQueue):
         self._rangeQueue=rangeQueue
-    async def getRanges(self,indexLookupInformation : LookupInformation, queue):
-        print("lbase")
+    def getRanges(self,indexLookupInformation : LookupInformation, queue):
+        pass
 
-def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, output : queue.Queue ) -> None:
+def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, output : queue.SimpleQueue ) -> None:
     indexTableOps = lookupInformation.getTableOps()
 
     indexScanner = indexTableOps.createScanner(lookupInformation.getAuths(),1)
@@ -104,10 +121,10 @@ def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, outp
     indexrange = pysharkbite.Range(range.getValue())
 
     indexScanner.addRange(indexrange)
-    indexScanner.fetchColumn(range.getField().upper(),"")
+    if not  range.getField() is None:
+      indexScanner.fetchColumn(range.getField().upper(),"")
     indexSet = indexScanner.getResultSet()
 
-    print ("looking up " + range.getField() + " " + range.getValue())
     for indexKeyValue in indexSet:
        value = indexKeyValue.getValue()
        protobuf = Uid_pb2.List()
@@ -119,28 +136,28 @@ def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, outp
     indexScanner.close()
     print("producer finished")
 
-async def executeIterator(indexLookupInformation : LookupInformation,iterator : LookupIterator, output : queue.Queue ) -> None:
-    await iterator.getRanges(indexLookupInformation,output)
+def executeIterator(indexLookupInformation : LookupInformation,iterator : LookupIterator, output : queue.SimpleQueue ) -> None:
+    iterator.getRanges(indexLookupInformation,output)
     print("executor finished")
 
 class OrIterator(LookupIterator):
     def __init__(self,rng : RangeLookup):
-        self._rangeQueue=queue.Queue()
+        self._rangeQueue=queue.SimpleQueue()
         self._rangeQueue.put(rng)
 
     def __init__(self):
-        self._rangeQueue=queue.Queue()
+        self._rangeQueue=queue.SimpleQueue()
 
     def addRange(self, rng):
         self._rangeQueue.put(rng)
 
-    async def getRanges(self,indexLookupInformation : LookupInformation, queue : queue.Queue):
-        loop = asyncio.get_running_loop()
+    def getRanges(self,indexLookupInformation : LookupInformation, queue : queue.SimpleQueue):
+        loop = asyncio.new_event_loop()
 
         with concurrent.futures.ThreadPoolExecutor() as pool:
             while not self._rangeQueue.empty():
                 rng = self._rangeQueue.get()
-                result = await loop.run_in_executor(pool, lookupRange,indexLookupInformation, rng, queue)
+                result = loop.run_in_executor(pool, lookupRange,indexLookupInformation, rng, queue)
 
         #loop.close()
         
@@ -288,71 +305,190 @@ class IndexLookup(LuceneTreeVisitorV2):
         return RangeLookup(None,value) 
 
 
-async def produceShardRanges(indexLookupInformation : LookupInformation,output : asyncio.Queue, iterator: LookupIterator):
-        ranges = queue.Queue()
-        await executeIterator(indexLookupInformation,iterator,ranges)
-        while not ranges.empty():
-            rng = ranges.get()
-            print("Produced shard range")
-            await output.put(rng)
+def produceShardRanges(cancellationtoken : CancellationToken,indexLookupInformation : LookupInformation,output : queue.SimpleQueue, iterator: LookupIterator):
+        ranges = queue.SimpleQueue()
+        executeIterator(indexLookupInformation,iterator,ranges)
+        print ("Producing shard ranges")
+        while not ranges.empty() and not cancellationtoken.cancelled():
+            try:
+              rng = ranges.get(False)
+              output.put(rng,timeout=2)
+              print("Size is " + str(output.qsize()))
+            except Queue.Empty:
+              continue
+            except:
+              break
+        cancellationtoken.cancel()
+        print("Exiting producer")
         
 
-async def getDocuments(lookupInformation : LookupInformation,input : asyncio.Queue, outputQueue : queue.Queue):
-    while True:
-        docInfo = await input.get()
-        print ("Looking up doc " + docInfo.getShard())
-        tableOps = lookupInformation.getTableOps()
-        print("wut")
-        scanner = tableOps.createScanner(lookupInformation.getAuths(),1)
-        print("okay")
-        startKey = pysharkbite.Key()
-        endKey = pysharkbite.Key()
-        print("3")
-        startKey.setRow(docInfo.getShard())
-        print("Found " + docInfo.getShard())
-        docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
-        startKey.setColumnFamily(docid)
-        endKey.setRow(docInfo.getShard())
-        endKey.setColumnFamily(docid + "\xff")
-        rng = pysharkbite.Range(startKey,True,endKey,True)
+def scanDoc(scanner, outputQueue):
+    resultset = scanner.getResultSet()
+    count = 0
+    for keyvalue in resultset:
+        key = keyvalue.getKey()
+        value = keyvalue.getValue()
+        if len(value.get()) == 0:
+          continue
+        print("Received one of length" + str(len(value.get())))
+        outputQueue.put( value.get() )
+        count=count+1
+    print("Exiting scan")
 
-        scanner.addRange(rng)
+    scanner.close()
 
-        with open('jsoncombiner.py', 'r') as file:
+    return count
+
+def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInformation : LookupInformation,input : queue.SimpleQueue, outputQueue : queue.SimpleQueue):
+  count=0
+  while cancellationtoken.running():
+    docInfo = None
+    try:
+        try:
+            print("getting " + str(name))
+            print("estimated size " + str(input.qsize()))
+            if input.empty():
+              print("continue because empty**")
+            else:
+              docInfo = input.get(timeout=1)
+            print("oh goody 1 **")
+        except:
+            print("Continuing")
+            # Handle empty queue here
+        if not docInfo is None:
+          print("Scanning shard from "+ str(name))
+          tableOps = lookupInformation.getTableOps()
+          scanner = tableOps.createScanner(lookupInformation.getAuths(),5)
+          startKey = pysharkbite.Key()
+          endKey = pysharkbite.Key()
+          startKey.setRow(docInfo.getShard())
+          docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+          startKey.setColumnFamily(docid)
+          endKey.setRow(docInfo.getShard())
+          endKey.setColumnFamily(docid + "\xff")
+          rng = pysharkbite.Range(startKey,True,endKey,True)
+
+          scanner.addRange(rng)
+
+          rangecount=1
+
+          while rangecount < 10:
+            try:
+              print("getting " + str(name))
+              docInfo = input.get(False)
+              print("oh goody " + str(rangecount))
+              startKey = pysharkbite.Key()
+              endKey = pysharkbite.Key()
+              startKey.setRow(docInfo.getShard())
+              docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+              startKey.setColumnFamily(docid)
+              endKey.setRow(docInfo.getShard())
+              endKey.setColumnFamily(docid + "\xff")
+              rng = pysharkbite.Range(startKey,True,endKey,True)
+  
+              scanner.addRange(rng)
+              rangecount=rangecount+1
+      
+            except:
+              print("oh")
+              rangecount=11
+
+          print("attempting scan")
+
+          with open('jsoncombiner.py', 'r') as file:
             combinertxt = file.read()
             combiner=pysharkbite.PythonIterator("PythonCombiner",combinertxt,100)
             scanner.addIterator(combiner)
-        print("start") 
-        resultset = scanner.getResultSet()
-        for keyvalue in resultset:
-            key = keyvalue.getKey()
-            value = keyvalue.getValue()
-            outputQueue.put( value.get() )
-        print("done")
-        scanner.close()
-
-        input.task_done()
-
-async def lookup(indexLookupInformation : LookupInformation, docLookupInformation : LookupInformation,iterator: LookupIterator, documents : queue.Queue):
-    print ("looking up")
-
-    asyncQueue = asyncio.Queue()
-
-    # fire up the both producers and consumers
-    producers = [asyncio.create_task(produceShardRanges(indexLookupInformation,asyncQueue,iterator))
-                 for _ in range(2)]
-    consumers = [asyncio.create_task(getDocuments(docLookupInformation,asyncQueue,documents))
-                 for _ in range(10)]
+          print ("Launching from " + str(name))
+          count = count + scanDoc(scanner,outputQueue)
+          print("gotdoc")
+        else:
+          print("continuing")
+          time.sleep(0.5)
+      
+    except:
+      print("**ERror**",flush=True)
+      e = sys.exc_info()[0]
+      print("**Error occurred" + e,flush=True)  
+  print("*Exiting " + str(name),flush=True) 
+  print("Count is " + str(count),flush=True)
+  if cancellationToken.cancelled():
+    print("*Exiting " + str(name) + " due to cancellation", flush=True)
+  return True
+#    while True:
+ #     docInfo = input.get()
+  #    input.task_done()
 
 
-    await asyncio.gather(*producers)
+def runningWorkers(workers):
+  for worker in workers:
+    if not worker.done():
+      print("Still running")
+      return True
+  print("finished")
+  return False
 
-    await asyncQueue.join()
 
-    for c in consumers:
-        c.cancel()
+def lookup(indexLookupInformation : LookupInformation, docLookupInformation : LookupInformation,iterator: LookupIterator, documents : queue.SimpleQueue):
+
+    asyncQueue = queue.SimpleQueue()
+
+    intermediateQueue = queue.SimpleQueue()
+
+    isrunning = CancellationToken()
+    producerrunning = CancellationToken()
+    workers = list()
 
 
+    executor = ThreadPoolExecutor(max_workers=5)
+    producer = executor.submit(produceShardRanges,producerrunning,indexLookupInformation,asyncQueue,iterator)
+    
+    for i in range(2):
+      future = executor.submit(getDocuments,isrunning,i,docLookupInformation,asyncQueue,intermediateQueue)
+      workers.append(future)
+
+    counts = 0
+    while not producerrunning.cancelled():
+      if intermediateQueue.qsize() > 10:
+        producerrunning.cancel()
+        break;
+      time.sleep(.5)
+
+    while counts < 10 and (runningWorkers(workers) or not asyncQueue.empty()):
+          if asyncQueue.empty() and producerrunning.cancelled():
+             isrunning.cancel()
+          try:
+           if not intermediateQueue.empty():
+            documents.put(intermediateQueue.get())
+            counts=counts+1
+           else:
+            time.sleep(1)
+          except Queue.Empty:
+            pass
+    print("Exited main loop " + str(counts) + " " + str(runningWorkers(workers)))
+
+    while counts < 10 and not intermediateQueue.empty():
+      try:
+         if not intermediateQueue.empty():
+          doc = intermediateQueue.get()
+         
+          documents.put(doc)
+          counts=counts+1
+         else:
+          time.sleep(1)
+      except :
+          pass
+
+    isrunning.cancel()
+    producerrunning.cancel()
+
+    print("Canceling tasks")
+
+    for worker in workers:
+      worker.cancel()
+
+    print("awaiting shutdown")
+    executor.shutdown()
 
 
 conf = pysharkbite.Configuration()
@@ -439,8 +575,6 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
        if key.getColumnFamily() == "f":
          day = key.getColumnQualifier().split("\u0000")[1]
          dt = key.getColumnQualifier().split("\u0000")[0]
-#         print(day + " " + key.getRow() + " " + value.get())
-#         binstream = ByteArrayInputStream(value.get().encode("latin1"))i
          if day in mapping:
            if key.getRow() in mapping[day]:
             print(dt + " " + day + " " + key.getRow() + " " + value.get() + " " + str(mapping[day][key.getRow()])) 
@@ -496,22 +630,24 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       start=time.time()
       indexLookupInformation=LookupInformation("shardIndex",auths,indexTableOps)
       shardLookupInformation=LookupInformation(table,auths,tableOperations)
-      wanted_items = set()
+      wanted_items = list()
       tree = parser.parse(entry)
       tree = resolver(tree)
       visitor = IndexLookup()
       iterator = visitor.visit(tree)
       if isinstance(iterator, RangeLookup):
         print("wearerangelookup")
-        iterator = OrIterator(iterator)
-      docs = queue.Queue()
-      asyncio.run( lookup(indexLookupInformation,shardLookupInformation,iterator,docs))
+        rng = iterator
+        iterator = OrIterator()
+        iterator.addRange(rng)
+      docs = queue.SimpleQueue()
+      lookup(indexLookupInformation,shardLookupInformation,iterator,docs)
 
       counts = 0
       while not docs.empty():
-        wanted_items.add(docs.get())
+        wanted_items.append(docs.get())
         counts=counts+1
-      print ("technically finished")
+      print ("technically finished with " + str(counts))
       #return Query.objects.filter(pk__in = wanted_items)
 #      return JsonResponse(events)
       nxt=""
