@@ -4,6 +4,8 @@ from django.shortcuts import render
 from django.shortcuts import render_to_response
 from ctypes import cdll
 from argparse import ArgumentParser
+import heapq
+from sortedcontainers import SortedList, SortedSet, SortedDict
 import ctypes
 import os
 import traceback
@@ -48,13 +50,19 @@ faulthandler.enable()
 import pysharkbite
 
 
+
+def runningWorkers(workers):
+  for worker in workers:
+    if not worker.done():
+      return True
+  return False
+
 class CancellationToken:
    def __init__(self):
        self._is_cancelled = threading.Event()
        self._is_cancelled.clear()
 
    def cancel(self):
-       print("Canceling condition",flush=True)
        self._is_cancelled.set()
 
    def running(self):
@@ -94,7 +102,14 @@ class Range:
     def getDocId(self):
         return self._docid
 
-    
+    def __eq__(self, other):
+        return self._shard == other._shard and self._docid == other._docid
+
+    def __gt__(self, other):
+       return self._shard > other._shard and self._docid > other._docid 
+
+    def __lt__(self, other):
+       return self._shard < other._shard and self._docid < other._docid  
 
 class RangeLookup:
     def __init__(self,field,value):
@@ -111,9 +126,9 @@ class LookupIterator(object):
     def __init__(self,rangeQueue):
         self._rangeQueue=rangeQueue
     def getRanges(self,indexLookupInformation : LookupInformation, queue):
-        pass
+      pass
 
-def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, output : queue.SimpleQueue ) -> None:
+def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, output ) -> None:
     indexTableOps = lookupInformation.getTableOps()
 
     indexScanner = indexTableOps.createScanner(lookupInformation.getAuths(),1)
@@ -134,11 +149,13 @@ def lookupRange(lookupInformation : LookupInformation, range : RangeLookup, outp
             datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]            
             output.put( Range(datatype,shard,uidvalue))
     indexScanner.close()
-    print("producer finished")
 
-def executeIterator(indexLookupInformation : LookupInformation,iterator : LookupIterator, output : queue.SimpleQueue ) -> None:
+
+
+def executeIterator(indexLookupInformation : LookupInformation,iterator : LookupIterator, output ) -> None:
     iterator.getRanges(indexLookupInformation,output)
     print("executor finished")
+
 
 class OrIterator(LookupIterator):
     def __init__(self,rng : RangeLookup):
@@ -157,17 +174,107 @@ class OrIterator(LookupIterator):
         with concurrent.futures.ThreadPoolExecutor() as pool:
             while not self._rangeQueue.empty():
                 rng = self._rangeQueue.get()
-                result = loop.run_in_executor(pool, lookupRange,indexLookupInformation, rng, queue)
-
+                if isinstance(rng,RangeLookup):
+                  result = loop.run_in_executor(pool, lookupRange,indexLookupInformation, rng, queue)
+                elif isinstance(rng,LookupIterator):
+                  rng.getRanges(indexLookupInformation,queue)  
         #loop.close()
-        
+       
+EndOfIter = object() # Sentinel value
+
+class ForwardIterator(object):
+    def __init__(self, it):
+        self._indexset = it
+        self.it = it.__iter__()
+        self._peek = None
+        self.__next__() # pump iterator to get first value
+
+    def __iter__(self): 
+        return self
+
+    def __next__(self):
+        cur = self._peek
+        if cur is EndOfIter:
+            raise StopIteration()
+
+        try:
+            indexKeyValue = self.it.__next__()
+            value = indexKeyValue.getValue()
+            protobuf = Uid_pb2.List()
+            protobuf.ParseFromString(value.get().encode())
+            for uidvalue in protobuf.UID:
+              shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
+              datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+              self._peek=Range(datatype,shard,uidvalue)
+        except StopIteration:
+            self._peek = EndOfIter
+        except:    
+            self._peek = EndOfIter
+        return cur
+
+    def peek(self): 
+        return self._peek
 
 
+def intersct_sets(seqs):
+   if not seqs: return   # No items
+   iterators = [ForwardIterator(seq.getResultSet()) for seq in seqs]
+   first, rest = iterators[0], iterators[1:]
+   for item in first:
+       candidates = list(rest)
+       while candidates:
+           if any(c.peek() is EndOfIter for c in candidates): return  # Exhausted an iterator
+           candidates = [c for c in candidates if c.peek() < item]
+           for c in candidates: c.next()
+       # Out of loop if first item in remaining iterator are all >= item.
+       if all(it.peek() == item for it in rest):
+           yield item
+def lookupRanges(lookupInformation : LookupInformation, ranges : list, output ) -> None:
+    indexTableOps = lookupInformation.getTableOps()
+
+    rngs = [None] * len(ranges)
+    scnrs = [None] * len(ranges)
+    count=0
+    for rng in ranges:
+      if isinstance(rng,LookupIterator):
+        pass
+      else:  
+        scnrs[count] = indexTableOps.createScanner(lookupInformation.getAuths(),1)
+        indexrange = pysharkbite.Range(rng.getValue())
+        scnrs[count].addRange(indexrange)
+        if not  rng.getField() is None:
+          scnrs[count].fetchColumn(rng.getField().upper(),"")
+        count=count+1
+  
+    for indexKeyValue in intersct_sets(scnrs):
+       output.put( indexKeyValue)
+    for scnr in scnrs:
+      if not isinstance(scnr,LookupIterator):
+        scnr.close()
+
+class AndIterator(LookupIterator):
+    def __init__(self,rng : RangeLookup):
+        self._rangeQueue=list()
+        self._rangeQueue.append(rng)
+
+    def __init__(self):
+        self._rangeQueue=list()
+
+    def addRange(self, rng):
+        self._rangeQueue.append(rng)
+
+
+    def getRanges(self,indexLookupInformation : LookupInformation, queue : queue.SimpleQueue):
+        if len(self._rangeQueue)==0:
+          return
+        queueitem = 0
+        loop = asyncio.new_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+          result = loop.run_in_executor(pool, lookupRanges,indexLookupInformation, self._rangeQueue, queue)
 
 class IndexLookup(LuceneTreeVisitorV2):
     def __init__(self):
-        print("here")
-
+        pass
     def visit_and_operation(self, *args, **kwargs):
         return self._binary_operation("AND", *args, **kwargs)
     
@@ -178,10 +285,13 @@ class IndexLookup(LuceneTreeVisitorV2):
     def _binary_operation(self, op_type_name, node, parents, context):
         child_context = dict(context) if context is not None else {}
         operation="OR"
+        iter = OrIterator()
         if op_type_name == "AND":
-            operation="AND"
+            print("encoutered and")
+            iter = AndIterator()
         else:
-            operation="OR"
+            print ("encountered or")
+            iter = OrIterator()
 
         children = self.simplify_if_same(node.children, node)
         children = self._yield_nested_children(node, children)
@@ -191,13 +301,16 @@ class IndexLookup(LuceneTreeVisitorV2):
         items = [self.visit(child, parents + [node], child_context) for child in
                  children]
         #We are selecting columns
-        iter = OrIterator()
   
         for lookup in items:
-            if lookup.getValue() == "or":
-                operation="OR"
+            ## add iterators
+            if isinstance(lookup, LookupIterator):
+               iter.addRange(item)
+            elif lookup.getValue() == "or":
+                pass    
+        #    iter = OrIterator()
             elif lookup.getValue() == "and":
-                operation="AND"
+                pass # :witer = AndIterator()
             else:
                 print("value is " + lookup.getValue())
                 iter.addRange(lookup)
@@ -242,7 +355,7 @@ class IndexLookup(LuceneTreeVisitorV2):
         """
         Raise if a OR (should) is in a AND (must) without being in parenthesis::
             >>> builder = ElasticsearchQueryBuilder()
-            >>> op = OrOperation(Word('yo'), OrOperation(Word('lo'), Word('py')))
+            >>> op = OrOperation(Word('yo'), OrOperation(Word('lo'), Word('py'))
             >>> list(builder._yield_nested_children(op, op.children))
             [Word('yo'), OrOperation(Word('lo'), Word('py'))]
             >>> op = OrOperation(Word('yo'), AndOperation(Word('lo'), Word('py')))
@@ -345,13 +458,10 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
     docInfo = None
     try:
         try:
-            print("getting " + str(name))
-            print("estimated size " + str(input.qsize()))
             if input.empty():
-              print("continue because empty**")
+              pass
             else:
               docInfo = input.get(timeout=1)
-            print("oh goody 1 **")
         except:
             print("Continuing")
             # Handle empty queue here
@@ -403,7 +513,6 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
           count = count + scanDoc(scanner,outputQueue)
           print("gotdoc")
         else:
-          print("continuing")
           time.sleep(0.5)
       
     except:
@@ -420,14 +529,6 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
   #    input.task_done()
 
 
-def runningWorkers(workers):
-  for worker in workers:
-    if not worker.done():
-      print("Still running")
-      return True
-  print("finished")
-  return False
-
 
 def lookup(indexLookupInformation : LookupInformation, docLookupInformation : LookupInformation,iterator: LookupIterator, documents : queue.SimpleQueue):
 
@@ -442,7 +543,6 @@ def lookup(indexLookupInformation : LookupInformation, docLookupInformation : Lo
 
     executor = ThreadPoolExecutor(max_workers=5)
     producer = executor.submit(produceShardRanges,producerrunning,indexLookupInformation,asyncQueue,iterator)
-    
     for i in range(2):
       future = executor.submit(getDocuments,isrunning,i,docLookupInformation,asyncQueue,intermediateQueue)
       workers.append(future)
@@ -456,28 +556,36 @@ def lookup(indexLookupInformation : LookupInformation, docLookupInformation : Lo
 
     while counts < 10 and (runningWorkers(workers) or not asyncQueue.empty()):
           if asyncQueue.empty() and producerrunning.cancelled():
+             print("Requesting cancellation of workers",flush=True)
              isrunning.cancel()
           try:
            if not intermediateQueue.empty():
+            print("adding doc")
             documents.put(intermediateQueue.get())
             counts=counts+1
            else:
+            print("Wating" + str(asyncQueue.qsize()))
             time.sleep(1)
           except Queue.Empty:
             pass
     print("Exited main loop " + str(counts) + " " + str(runningWorkers(workers)))
 
     while counts < 10 and not intermediateQueue.empty():
+      print ("adding more docs")
       try:
          if not intermediateQueue.empty():
           doc = intermediateQueue.get()
-         
+          print("adding doc" + str(len(doc)))
+          
           documents.put(doc)
           counts=counts+1
          else:
+          print("Wating")
           time.sleep(1)
       except :
           pass
+
+    print("found about " + str(documents.qsize()))
 
     isrunning.cancel()
     producerrunning.cancel()
@@ -603,7 +711,7 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())  
       connector = pysharkbite.AccumuloConnector(user, zk)
 
-      entry = request.GET.get('q').lower()
+      entry = request.GET.get('q')
       selectedauths = request.GET.getlist('auths')
       try:
         skip = int(request.GET.get('s'))
