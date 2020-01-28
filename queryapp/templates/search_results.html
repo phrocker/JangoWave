@@ -8,7 +8,7 @@
 
 <div align="center">
 <h1>Search Results</h1>
-query took {{ time }} ms
+query took {{ time }} s
 <form action="/search" method="get">
   <input name="q" type="text" value="{{ query }}">
 
@@ -42,7 +42,6 @@ query took {{ time }} ms
 </div>
 {% for result in results %}
 <table style="width:100%">
-   <!-- {{ result }}<!-->
   <pre id="json">{{ result }}</pre>
   
 </table>
