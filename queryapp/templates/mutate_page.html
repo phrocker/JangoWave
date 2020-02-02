@@ -9,6 +9,9 @@
 <div align="center">
 <h1>Edit Event</h1>
 </div>
+<form target='_parent' method="POST" action="/mutate/">
+{% csrf_token %}
+ <input type="hidden" id="query" name="query" value="{{query}}">
 {% for result in results|remove_fields %}
 <table  style="width:100%" >
 {% for key,value in result.items %}
@@ -17,10 +20,16 @@
 {{key}}
 </td>
 <td>
+<!-- simply an optimizaiton -->
+<input type="hidden" name="original.{{key}}" value="{{value}}"/>
 <input name="{{key}}" type="text" value="{{value}}"/>
 </td>
 </tr>
 {% endfor %}
+</table>
 {% endfor %}
+<button type="submit" class="btn btn-primary">Edit</button>
+<button type="button" class="btn btn-danger">Delete</button>
+</form>
 
 {% endblock %}

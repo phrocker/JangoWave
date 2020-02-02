@@ -33,6 +33,7 @@
                         <p>Search Accumulo</p>
                     </a>
                 </li>
+ {% if request.user.is_authenticated or authenticated %}
                 <li class="nav-item">
                     <a href="/fieldmetadata" class="nav-link">
                         <i class="nav-icon fas fa-info"></i>
@@ -45,6 +46,7 @@
                         <p>Explore Data</p>
                     </a>
                 </li>
+  {% endif %}
                 <!--<li class="nav-item">
                         <a href="#" class="nav-link active">
                             <i class="nav-icon fas fa-tachometer-alt"></i> 

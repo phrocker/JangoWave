@@ -11,6 +11,8 @@ def remove_fields(json):
   for js in json:
     del js['uid']
     del js['shard']
+    del js['ORIG_FILE']
+    del js['LOAD_DATE']
     del js['datatype']
     jayson.append(js)
   return jayson 

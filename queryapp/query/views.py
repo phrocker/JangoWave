@@ -1,10 +1,13 @@
 from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import user_passes_test
+from django.template import RequestContext
 from django.core.cache import caches
 import matplotlib.pyplot as plt
 import random
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django import http
+from django.http import HttpResponseRedirect
 from django.shortcuts import render_to_response
 from ctypes import cdll
 from argparse import ArgumentParser
@@ -652,7 +655,7 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      return  render_to_response('data.html', {})
+      return  render_to_response('data.html', {'authenticated':True})
 
 class ComplexEncoder(json.JSONEncoder):
     """Always return JSON primitive."""
@@ -800,6 +803,7 @@ class MetadataChartView(JSONResponseMixin,TemplateView):
     model = Query
     template_name = 'data.html'
 
+
     def get_context_data(self,**kwargs):#,request,*args, **kwargs):
         print("oh boy")
         context = super(MetadataChartView, self).get_context_data(**kwargs)
@@ -939,7 +943,7 @@ class FieldMetadataView(StrongholdPublicMixin,TemplateView):
              mapping[day][key.getRow()] = int( value.get() )
            except:
              pass
-      return render_to_response('fieldmetadata.html', { 'metadata': mapping })
+      return render_to_response('fieldmetadata.html', { 'authenticated':True, 'metadata': mapping })
 
 class MutateEventView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -952,6 +956,27 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
     @method_decorator(login_required)
+    def post(self, request, *args, **kwargs):
+      query= request.POST.get('query')
+      originals = {}
+      news = {}
+      for key, value in request.POST.items():
+        if key == "query":
+          query = value
+        elif key.startswith("original"):
+           split = key.split(".")
+           originals[split[1]] = value
+        elif key == "csrfmiddlewaretoken":
+          pass
+        else:
+          news[key] = value
+      for key,value in news.items():
+        if news[key] == originals[key]:
+          print(key + " is unchanged")
+      
+      url = "/search/?q=" + query
+      return HttpResponseRedirect(url)
+    @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
       user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
@@ -962,6 +987,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       shard = request.GET.get('shard')
       datatype = request.GET.get('dt')
       uid = request.GET.get('id')
+      q = request.GET.get('query')
       auths = pysharkbite.Authorizations()
       asyncQueue = queue.SimpleQueue()
       asyncQueue.put(Range(datatype,shard,uid))
@@ -975,7 +1001,9 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       while not docs.empty():
         wanted_items.append(docs.get())
       # def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
-      return render_to_response('mutate_page.html',{'results' : wanted_items})
+      context = {'query': q , 'results' : wanted_items}
+      return render(request,'mutate_page.html',context)
+      #return render_to_response('mutate_page.html',{'query': q , 'results' : wanted_items},context_instance =RequestContext(request))
 
 
 
