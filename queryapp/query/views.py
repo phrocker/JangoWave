@@ -1,6 +1,10 @@
 from django.utils.decorators import method_decorator
+from django.core.cache import caches
+import matplotlib.pyplot as plt
+import random
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+from django import http
 from django.shortcuts import render_to_response
 from ctypes import cdll
 from argparse import ArgumentParser
@@ -13,8 +17,9 @@ import traceback
 import sys
 sys.path.insert(1, '/home/centos/')
 sys.path.insert(1, '/usr/local/lib/python3.7/site-packages/')
-from . Uid_pb2 import *
+import Uid_pb2
 import time
+import datetime
 import json
 from django.http import JsonResponse
 from concurrent.futures import ThreadPoolExecutor
@@ -46,6 +51,12 @@ resolver = UnknownOperationResolver()
 
 import faulthandler
 faulthandler.enable()
+
+import jnius_config
+#jnius_config.set_classpath('.', '/home/centos/datawave-ws-deploy-application-3.1.0-SNAPSHOT/ear/*')
+#jnius_config.set_classpath('.', '/home/centos/datawave-ws-deploy-application-3.1.0-SNAPSHOT/ear/lib/*')
+jnius_config.set_classpath('.', '/home/centos/datawave-dev-3.1.0-SNAPSHOT/lib/*')
+import jnius
 
 
 
@@ -396,7 +407,9 @@ def scanDoc(scanner, outputQueue):
         if len(value.get()) == 0:
           continue
         print("Received one of length" + str(len(value.get())))
-        outputQueue.put( value.get() )
+        jsonpayload = json.loads(value.get())
+        outputQueue.put( jsonpayload )
+    
         count=count+1
     print("Exiting scan")
 
@@ -480,7 +493,51 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
  #     docInfo = input.get()
   #    input.task_done()
 
+def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
 
+    intermediateQueue = queue.SimpleQueue()
+
+    isrunning = CancellationToken()
+    workers = list()
+
+
+    executor = ThreadPoolExecutor(max_workers=2)
+    future = executor.submit(getDocuments,isrunning,0,docLookupInformation,asyncQueue,intermediateQueue)
+    workers.append(future)
+
+    counts = 0
+    while counts < 10 and (runningWorkers(workers) or not asyncQueue.empty()):
+          if asyncQueue.empty():
+             isrunning.cancel()
+          try:
+           if not intermediateQueue.empty():
+            documents.put(intermediateQueue.get())
+            counts=counts+1
+           else:
+            time.sleep(1)
+          except Queue.Empty:
+            pass
+
+    while counts < 10 and not intermediateQueue.empty():
+      try:
+         if not intermediateQueue.empty():
+          doc = intermediateQueue.get()
+
+          documents.put(doc)
+          counts=counts+1
+         else:
+          time.sleep(1)
+      except :
+          pass
+
+    print("found about " + str(documents.qsize()))
+
+    isrunning.cancel()
+
+    for worker in workers:
+      worker.cancel()
+
+    executor.shutdown()
 
 def lookup(indexLookupInformation : LookupInformation, docLookupInformation : LookupInformation,iterator: LookupIterator, documents : queue.SimpleQueue):
 
@@ -582,11 +639,12 @@ class UserAuthsView(TemplateView):
     def get_queryset(self):
       return UserAuths.objects.filter(user=request.user)
 
+
 class MetadataView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
     redirect_field_name = 'login'
     model = Query
-    template_name = 'metadata.html'
+    template_name = 'data.html'
 
     @method_decorator(login_required)
     def dispatch(self, *args, **kwargs):
@@ -594,6 +652,171 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
+      return  render_to_response('data.html', {})
+
+class ComplexEncoder(json.JSONEncoder):
+    """Always return JSON primitive."""
+
+    def default(self, obj):
+        try:
+            return super(ComplexEncoder, obj).default(obj)
+        except TypeError:
+            if hasattr(obj, "pk"):
+                return obj.pk
+            return str(obj)
+
+class JSONResponseMixin(object):
+    def render_to_response(self, context):
+        "Returns a JSON response containing 'context' as payload"
+        return self.get_json_response(self.convert_context_to_json(context))
+
+    def get_json_response(self, content, **httpresponse_kwargs):
+        "Construct an `HttpResponse` object."
+        return http.HttpResponse(
+            content, content_type="application/json", **httpresponse_kwargs
+        )
+
+    def convert_context_to_json(self, context):
+        "Convert the context dictionary into a JSON object"
+        return json.dumps(context, cls=ComplexEncoder)
+
+
+def daterange(start_date, end_date):
+    for n in range(int ((end_date - start_date).days)):
+        yield start_date + datetime.timedelta(n)
+
+def getDateRange(days : int ):
+  adjusted_date = datetime.datetime.now() + datetime.timedelta(days)
+  now_date = datetime.datetime.now()
+#strftime("%Y%m%d")
+  if (days >= 0):
+    return daterange(now_date,adjusted_date)
+  else:
+    return daterange(adjusted_date,now_date)
+
+
+class MetadataEventCountsView(JSONResponseMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'data.html'
+
+    def get_context_data(self,**kwargs):#,request,*args, **kwargs):
+        print("oh boy")
+        context = super(MetadataEventCountsView, self).get_context_data(**kwargs)
+        tpl = self.get_data()
+        context.update({"labels": tpl[0], "datasets": tpl[1]})
+        return context
+    def get_data(self): #, request, *args, **kwargs):
+      queryRanges = list()
+      #last seven days
+      for dateinrange in getDateRange(-7):
+        shardbegin = dateinrange.strftime("%Y%m%d")
+        print( dateinrange.strftime("%Y%m%d") )
+        if caches['eventcount'].get(shardbegin) is None:
+          print(shardbegin + " is not cached")
+          queryRanges.append(shardbegin)
+        else:
+          pass # don't add to range
+
+      if len(queryRanges) > 0:
+        ## all is cached
+      
+        user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+        connector = pysharkbite.AccumuloConnector(user, zk)
+
+        indexTableOps = connector.tableOps("DatawaveMetrics")
+
+        auths = pysharkbite.Authorizations()
+        auths.addAuthorization("MTRCS")
+  
+        print("oh")
+        indexScanner = indexTableOps.createScanner(auths,100)
+        start=time.time()
+        for dt in queryRanges:
+          print("Creating range for " + dt)
+          indexrange = pysharkbite.Range(dt,True,dt+"\uffff",False)
+          indexScanner.addRange(indexrange)
+        indexScanner.fetchColumn("EVENT_COUNT","")
+
+        combinertxt=""
+        ## load the combiner from the file system and send it to accumulo
+        with open('metricscombiner.py', 'r') as file:
+          combinertxt = file.read()
+        combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
+        indexScanner.addIterator(combiner)
+        indexSet = indexScanner.getResultSet()
+
+        counts=0
+        mapping={}
+        for indexKeyValue in indexSet:
+         value = indexKeyValue.getValue()
+         key = indexKeyValue.getKey()
+         print ("row is " + key.getRow() + " " + key.getColumnFamily()) 
+         if key.getColumnFamily() == "EVENT_COUNT":
+           dt = key.getRow().split("_")[0]
+           if dt in mapping:
+              mapping[dt] += int(value.get())
+           else:
+             mapping[dt] = int(value.get())
+        arr = [None] * len(mapping.keys())
+        for field in mapping:
+          print("Caching " + field + " " +  str(mapping[field]))
+          caches['eventcount'].set(field,str(mapping[field]),3600*24)
+
+      fields = [None] * 7
+
+      colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(7)]
+      counts=0
+
+      print("here")
+      arr = [None] * 7
+      for dateinrange in getDateRange(-7):
+        dt = dateinrange.strftime("%Y%m%d")
+        fields[counts]=dt
+        cachedVal = caches['eventcount'].get(dt)
+        if cachedVal is None:
+          numeric = 0
+        else:
+          numeric = int(cachedVal)
+        print("Cached value for " + dt + " is " + str( numeric))
+        arr[counts] = numeric
+        counts=counts+1
+      print("image")
+      returnval = [1]
+      ret = {}
+      ret["backgroundColor"]=colors
+      ret["label"] = "Distribution of data"
+      ret["data"] = arr
+      returnval[0] = ret
+      return (fields,returnval) #render_to_response('data.html', { 'metadata': mapping })
+
+
+
+
+class MetadataChartView(JSONResponseMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'data.html'
+
+    def get_context_data(self,**kwargs):#,request,*args, **kwargs):
+        print("oh boy")
+        context = super(MetadataChartView, self).get_context_data(**kwargs)
+        tpl = self.get_data()
+        context.update({"labels": tpl[0], "datasets": tpl[1]})
+        return context
+
+    def get_data(self): #, request, *args, **kwargs):
+
+      queryRanges = list()
+      #last seven days
+      for dateinrange in getDateRange(-7):
+        print( dateinrange.strftime("%Y%m%d") )     
+        queryRanges.append(dateinrange.strftime("%Y%m%d"))
+     
+       
+    
       user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
 
@@ -601,8 +824,8 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
 
       auths = pysharkbite.Authorizations()
 
-
-      indexScanner = indexTableOps.createScanner(auths,20)
+      print("oh")
+      indexScanner = indexTableOps.createScanner(auths,100)
       start=time.time()
       indexrange = pysharkbite.Range()
 
@@ -625,18 +848,136 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
        if key.getColumnFamily() == "f":
          day = key.getColumnQualifier().split("\u0000")[1]
          dt = key.getColumnQualifier().split("\u0000")[0]
+        
+         if key.getRow() in mapping:
+            pass # mapping[key.getRow()].append(int( value.get() ))
+         else:
+           try:
+             val = int( value.get() )
+             mapping[key.getRow()] = list()
+             mapping[key.getRow()].append(int( value.get() ))
+           except:
+             pass
+      arr = [None] * len(mapping.keys())
+      fields = [None] * len(mapping.keys())
+      
+      colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(len(mapping.keys()))]
+      for field in mapping:
+        arr[counts] = mapping[field][0]#[None] * len(mapping[field])
+        fields[counts]=field
+        loccount=0
+        for cnt in mapping[field]:
+        #  arr[counts][loccount] = cnt
+          loccount=loccount+1
+        counts=counts+1
+      print("image")
+      returnval = [1]
+      ret = {}
+      ret["backgroundColor"]=colors
+      ret["label"] = "Distribution of data" 
+      ret["data"] = arr
+      returnval[0] = ret
+      return (fields,returnval) #render_to_response('data.html', { 'metadata': mapping })
+
+class FieldMetadataView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'fieldmetadata.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, zk)
+
+      indexTableOps = connector.tableOps("DatawaveMetadata")
+
+      auths = pysharkbite.Authorizations()
+
+
+      indexScanner = indexTableOps.createScanner(auths,100)
+      start=time.time()
+      indexrange = pysharkbite.Range()
+
+      indexScanner.addRange(indexrange)
+      indexScanner.fetchColumn("f","")
+
+      combinertxt=""
+        ## load the combiner from the file system and send it to accumulo
+      with open('countgatherer.py', 'r') as file:
+        combinertxt = file.read()
+      combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
+      indexScanner.addIterator(combiner)
+      indexSet = indexScanner.getResultSet()
+
+      counts=0
+      mapping={}
+      for indexKeyValue in indexSet:
+       value = indexKeyValue.getValue()
+       key = indexKeyValue.getKey()
+       if key.getColumnFamily() == "f":
+         day = key.getColumnQualifier().split("\u0000")[1]
+         dt = key.getColumnQualifier().split("\u0000")[0]
          if day in mapping:
            if key.getRow() in mapping[day]:
-            print(dt + " " + day + " " + key.getRow() + " " + value.get() + " " + str(mapping[day][key.getRow()])) 
-            mapping[day][key.getRow()] += int( value.get() )
+            try:
+              mapping[day][key.getRow()] += int( value.get() )
+            except:
+              pass
            else:
-            print(dt + " " + day + " " + key.getRow() + " " + value.get() + " ")
-            mapping[day][key.getRow()] = int( value.get() )
+            try:
+              mapping[day][key.getRow()] = int( value.get() )
+            except:
+              pass
          else:
            mapping[day]={}
-           mapping[day][key.getRow()] = int( value.get() ) 
-  
-      return render_to_response('metadata.html', { 'metadata': mapping })
+           try:
+             mapping[day][key.getRow()] = int( value.get() )
+           except:
+             pass
+      return render_to_response('fieldmetadata.html', { 'metadata': mapping })
+
+class MutateEventView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'mutate_page.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, zk)
+
+      table = "shard"
+
+      tableOperations = connector.tableOps(table)
+      shard = request.GET.get('shard')
+      datatype = request.GET.get('dt')
+      uid = request.GET.get('id')
+      auths = pysharkbite.Authorizations()
+      asyncQueue = queue.SimpleQueue()
+      asyncQueue.put(Range(datatype,shard,uid))
+ #     for auth in selectedauths:
+  #      auths.addAuthorization(auth)
+   #   start=time.time()
+      shardLookupInformation=LookupInformation(table,auths,tableOperations)
+      docs = queue.SimpleQueue() 
+      getDoc(shardLookupInformation,asyncQueue,docs)  
+      wanted_items=list()
+      while not docs.empty():
+        wanted_items.append(docs.get())
+      # def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
+      return render_to_response('mutate_page.html',{'results' : wanted_items})
+
+
 
 class SearchResultsView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -664,6 +1005,17 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       print("query is " + entry)
         
 
+      try:
+        LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
+  
+        luceneparser = LuceneToJexlQueryParser()
+
+        node = luceneparser.parse(entry)
+
+        jexl = node.getOriginalQuery()
+        print("Jexl is " + jexl)
+      except:
+        pass
       indexLookup = 1
 
       table = "shard"

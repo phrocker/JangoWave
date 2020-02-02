@@ -108,14 +108,6 @@ function loadCharts() {
 
 {% block body %}
     <div class="wrapper">
-        {% block nav_header %}
-            {% include 'header.html' %}
-        {% endblock %}
-
-        {% block nav_sidebar %}
-            {% include 'sidebar.html' %}
-        {% endblock %}
-
         {% block content_wrapper %}
         <div class="content-wrapper">
             {% block content_header %}
@@ -152,9 +144,6 @@ function loadCharts() {
         </div>
         {% endblock content_wrapper %}
         
-        {% block nav_footer %}
-            {% include 'adminlte/lib/_main_footer.html' %}
-        {% endblock %}
 
     </div>
 {% endblock body %}

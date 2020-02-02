@@ -8,6 +8,11 @@ class PythonCombiner:
     if (iterator.hasTop()):
         mapping = {}
         key = iterator.getTopKey()
+        cfsplit = key.getColumnFamily().split("\x00")
+        mapping["shard"]=key.getRow()
+        if len(cfsplit) == 2:
+          mapping["datatype"]=cfsplit[0]
+          mapping["uid"]=cfsplit[1]
         cf = key.getColumnFamily()
         while (iterator.hasTop() and cf == key.getColumnFamily()):
             ## FN and FV in cq

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-
+{% load extras %}
 
 
 {% block title %}Jangowave Search{% endblock %}
@@ -41,9 +41,14 @@ query took {{ time }} s
 {% endif %}
 </div>
 {% for result in results %}
-<table style="width:100%">
-  <pre id="json">{{ result }}</pre>
-  
+<table style="width:100%" >
+<tr>
+<td>
+<pre id="json">
+<a onclick="openpage('Edit Event','/mutate?shard={{result.shard}}&dt={{result.datatype}}&id={{result.uid}}')" href="#">{{result | pretty_json }}</a>
+</pre>
+</td>
+</tr>
 </table>
 {% endfor %}
 <div align="center">

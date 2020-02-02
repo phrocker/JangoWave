@@ -1,0 +1,38 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Datawave Metadata{% endblock %}
+
+{% block content %}
+<div align="center">
+ 
+<script type="text/javascript">
+  loadCharts();
+</script>
+     <div class="row">
+        <div class="col-md-6">
+          <!-- AREA CHART -->
+          <div class="box box-primary">
+            <div class="box-header with-border">
+              <h3 class="box-title">Ingest Rates</h3>
+<canvas id="myLineChart" style="height:350px"></canvas>
+            </div>
+          </div>
+          </div>
+
+
+          <div class="col-md-6"><div class="box box-primary">
+  
+            <div class="box-header with-border">
+              <h3 class="box-title">Data Distribution</h3>
+<canvas id="myLineChart2" style="height:350px"></canvas>
+            </div>
+          </div>
+          </div>       
+  
+
+        </div>
+      </div>
+</div>
+
+{% endblock %}

@@ -12,4 +12,8 @@ django-slick-admin
 
 pyjnius
 
+pyparsing
+
+sortedcontainers
+
 django-adminlte3

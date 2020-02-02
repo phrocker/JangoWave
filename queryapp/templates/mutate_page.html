@@ -1,0 +1,26 @@
+{% extends 'modal.html' %}
+{% load extras %}
+
+
+{% block title %}Jangowave Search{% endblock %}
+
+{% block content %}
+
+<div align="center">
+<h1>Edit Event</h1>
+</div>
+{% for result in results|remove_fields %}
+<table  style="width:100%" >
+{% for key,value in result.items %}
+<tr>
+<td>
+{{key}}
+</td>
+<td>
+<input name="{{key}}" type="text" value="{{value}}"/>
+</td>
+</tr>
+{% endfor %}
+{% endfor %}
+
+{% endblock %}
