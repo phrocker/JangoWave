@@ -1,4 +1,4 @@
-from org.poma.accumulo import Key,KeyValue
+from pysharkbite import Key,KeyValue
 from org.apache.accumulo.core.data import Range,Value
 from org.apache.hadoop.io import WritableUtils
 from java.io import ByteArrayInputStream, DataInputStream

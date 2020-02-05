@@ -1,0 +1,38 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Your Uploads{% endblock %}
+
+{% block content %}
+
+<div align="center">
+<h1>Ingest Metadata</h1>
+</div>
+<!-- <i class="fas fa-search"></i>&nbsp;<input type="text" id="myInput" onkeyup="fieldMetadataSearch()" placeholder="Search field metadata...">
+-->
+<script>
+    // or to execute some function
+    window.onload = setReload; //notice no parenthesis
+</script>
+<div class="table-responsive-sm">
+              <table onload="setReload()" data-toggle="table" id="filestatus" data-sort-name="date" data-sort-order="desc"  class=" table-hover table table-bordered table-dark">
+                <thead>
+                <tr>
+                  <th data-sortable="true" data-field="filename">FileName</th>
+                  <th data-sortable="true" data-field="uploaddate">File UUID</th>
+                  <th data-sortable="true" data-field="status">Status</th>
+                </tr>
+                </thead>
+                <tbody>
+{% for field in uploads %}
+        <tr>
+                  <td><a href="/metadata?q={{key2}}&date={{key}}">{{field.originalfile}}</a></td>
+                  <td><a href="/metadata?q={{key2}}">{{field.uuid}}</a></td>
+                  <td>{{field.status}}</td>
+                </tr>
+{% endfor %}
+                </tbody>
+                </table>
+</div>
+
+{% endblock %}

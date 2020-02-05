@@ -42,6 +42,12 @@ $(document).keydown(function(event) {
 });
 }
 
+function setReload(){
+setTimeout(function(){
+   window.location.reload(1);
+}, 5000);
+}
+
 function fieldMetadataSearch() {
   // Declare variables
   var input, filter, table, tr, td, i ;

@@ -12,6 +12,10 @@
 <form target='_parent' method="POST" action="/mutate/">
 {% csrf_token %}
  <input type="hidden" id="query" name="query" value="{{query}}">
+ <input type="hidden" id="shard" name="shard" value="{{shard}}">
+ <input type="hidden" id="uid" name="uid" value="{{uid}}">
+ <input type="hidden" id="datatype" name="datatype" value="{{datatype}}">
+
 {% for result in results|remove_fields %}
 <table  style="width:100%" >
 {% for key,value in result.items %}

@@ -1,4 +1,4 @@
-from org.poma.accumulo import Key,KeyValue
+from pysharkbite import Key,KeyValue
 from org.apache.accumulo.core.data import Range,Value
 import json
 class PythonCombiner: 
