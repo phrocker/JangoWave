@@ -20,6 +20,17 @@
 
 <script>
 
+function deleteEvent(query,auths,shard,uid,datatype){
+$.ajax({
+    type: "DELETE",
+    url: "/mutate?query=" + query + "&auths" + auths + "&shard=" + shard + "&uid=" + uid + "&datatype=" + datatype,
+    data: "",
+    success: function(msg){
+        alert("Data Deleted: " + msg);
+    }
+});
+}
+
 function openpage(title, page){
 
 var $dialog = $('<div></div>')

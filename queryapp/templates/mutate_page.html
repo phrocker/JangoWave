@@ -12,6 +12,7 @@
 <form target='_parent' method="POST" action="/mutate/">
 {% csrf_token %}
  <input type="hidden" id="query" name="query" value="{{query}}">
+ <input type="hidden" id="auths" name="auths" value="{{auths}}">
  <input type="hidden" id="shard" name="shard" value="{{shard}}">
  <input type="hidden" id="uid" name="uid" value="{{uid}}">
  <input type="hidden" id="datatype" name="datatype" value="{{datatype}}">
@@ -33,7 +34,7 @@
 </table>
 {% endfor %}
 <button type="submit" class="btn btn-primary">Edit</button>
-<button type="button" class="btn btn-danger">Delete</button>
+<button type="button" class="btn btn-danger" onclick="deleteEvent('{{query}}','{{auths}}','{{shard}}','{{uid}}','{{datatype}}')">Delete</button>
 </form>
 
 {% endblock %}

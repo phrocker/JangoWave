@@ -37,6 +37,7 @@ from stronghold.views import StrongholdPublicMixin
 import threading
 
 from .models import FileUpload
+from .models import AccumuloCluster
 from .forms import DocumentForm
 from .models import Query
 from .models import UserAuths
@@ -609,7 +610,7 @@ conf = pysharkbite.Configuration()
 
 conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
 
-zk = pysharkbite.ZookeeperInstance("muchos", "mycluster-LeaderZK-1:2181,mycluster-LeaderZK-3:2181", 1000, conf)
+zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
 
 #pysharkbite.LoggingConfiguration.enableTraceLogger()
 
@@ -691,7 +692,7 @@ class JSONResponseMixin(object):
 
 
 def daterange(start_date, end_date):
-    for n in range(int ((end_date - start_date).days)):
+    for n in range(0,int ((end_date - start_date).days)+1):
         yield start_date + datetime.timedelta(n)
 
 def getDateRange(days : int ):
@@ -717,12 +718,12 @@ class MetadataEventCountsView(JSONResponseMixin,TemplateView):
         context.update({"labels": tpl[0], "datasets": tpl[1]})
         return context
     def get_data(self): #, request, *args, **kwargs):
-      colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(7)]
+      colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)]) for i in range(16)]
       counts=0
-      fields = [None] * 7
+      fields = [None] * 16
       print("here")
-      arr = [None] * 7
-      for dateinrange in getDateRange(-7):
+      arr = [None] * 16
+      for dateinrange in getDateRange(-15):
         dt = dateinrange.strftime("%Y%m%d")
         fields[counts]=dt
         cachedVal = caches['eventcount'].get(dt)
@@ -814,10 +815,53 @@ class FieldMetadataView(StrongholdPublicMixin,TemplateView):
       else:
         metadata = caches['metadata'].get("field")
 
-      print("have " + metadata)
       context={ 'admin': request.user.is_superuser, 'authenticated':True, 'metadata': json.loads(metadata) }
       return render(request,'fieldmetadata.html',context)
         
+
+class DeleteEventView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'mutate_page.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      shard = request.GET.get('shard')
+      datatype = request.GET.get('datatype')
+      uid = request.GET.get('uid')
+      query = request.GET.get('query')
+      authstring = request.GET.get('auths')
+      url = "/search/?q=" + query
+      auths = pysharkbite.Authorizations()
+      auths.addAuthorization(authstring)
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, zk) 
+      tableOps = connector.tableOps("shard")
+      scanner = tableOps.createScanner(auths,1)
+      startKey = pysharkbite.Key(row=shard)
+      endKey = pysharkbite.Key(row=shard)
+      docid = datatype + "\x00" + uid;
+      startKey.setColumnFamily(docid)
+      endKey.setColumnFamily(docid + "\xff")
+      rng = pysharkbite.Range(startKey,True,endKey,True)
+      scanner.addRange(rng)
+      writer = tableOps.createWriter(auths,10)
+      deletes = pysharkbite.Mutation(shard)
+      for keyValue in scanner.getResultSet():
+         key = keyValue.getKey()
+         deletes.putDelete( key.getColumnFamily(), key.getColumnQualifier(), key.getColumnVisibility(), key.getTimestamp())
+     ## scan for the original document
+      writer.addMutation(deletes)
+      writer.close()
+      ## add the deletes. Can leave the index hanging
+      for auth in authstring.split("|"):
+        url = url + "&auths=" + auth
+      return HttpResponseRedirect(url)
 
 class MutateEventView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -830,9 +874,16 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
     @method_decorator(login_required)
+    def delete(self, request, *args, **kwargs):
+      url = "/search/?q=" + query
+      for auth in authstring.split("|"):
+        url = url + "&auths=" + auth
+      return HttpResponseRedirect(url)
+    @method_decorator(login_required)
     def post(self, request, *args, **kwargs):
       query= request.POST.get('query')
       shard = request.POST.get('shard')
+      authstring = request.POST.get('auths')
       datatype= request.POST.get('datatype')
       uid = request.POST.get('uid')
       originals = {}
@@ -843,45 +894,73 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
         elif key.startswith("original"):
            split = key.split(".")
            originals[split[1]] = value
-        elif key == "shard" or key == "datatype" or key == "uid":
+        elif key == "shard" or key == "datatype" or key == "uid" or key == "auths":
           pass
         elif key == "csrfmiddlewaretoken":
           pass
         else:
           news[key] = value
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
 
       auths = pysharkbite.Authorizations()
+      #for auth in 
+      if not authstring is None and len(authstring) > 0:
+        print("got " + authstring)
+        auths.addAuthorization(authstring)
 
       table = "shard"
-
+      indexTable= "shardIndex"
       tableOperations = connector.tableOps(table)
-      
+      indexTableOps = connector.tableOps(indexTable)
       writer = tableOperations.createWriter(auths, 10)
-    
+      indexWriter = indexTableOps.createWriter(auths,5)
       mutation = pysharkbite.Mutation(shard);    
       diff=0
       for key,value in news.items():
+#        print (" for " + key + " we have " + news[key] + " " + originals[key] + " " + datatype + " " + uid)
         if news[key] != originals[key]:
-          mutation.put(datatype + "\x00" + uid,key + "\x00" + news[key],"",0, "value")
+          import datetime;
+          ts = int( datetime.datetime.now().timestamp())*1000
+          mutation.putDelete(datatype + "\x00" + uid,key + "\x00" + originals[key],authstring,ts)
+          ts = int( datetime.datetime.now().timestamp())*1000+100
+          print ("time stamp is " + str(ts))
+          mutation.put(datatype + "\x00" + uid,key + "\x00" + news[key],authstring,ts)
+          originalIndexMutation = pysharkbite.Mutation(originals[key])
+          indexMutation = pysharkbite.Mutation(news[key])
+          protobuf = Uid_pb2.List()
+          protobuf.COUNT=1
+          protobuf.IGNORE=False
+          protobuf.UID.append( uid )
+          indexMutation.put(key,shard + "\x00" + datatype,authstring,ts,protobuf.SerializeToString())
+          originalprotobuf = Uid_pb2.List()
+          indexWriter.addMutation(indexMutation)
+          originalprotobuf.COUNT=1
+          originalprotobuf.IGNORE=False
+          originalprotobuf.REMOVEDUID.append( uid)
+          originalIndexMutation.put(key,shard + "\x00" + datatype,authstring,ts,originalprotobuf.SerializeToString())
+          indexWriter.addMutation(originalIndexMutation)
           diff=diff+1
         else:
           print(news[key] + " is the same as " + originals[key])
       if diff > 0:
         print("Adding mudation")
         writer.addMutation( mutation )
-    
+#        deletewriter.addMutation( deletemutation )
+      indexWriter.close()
       writer.close()
- 
-    
+ #     deletewriter.close()
+      authy = ""
       url = "/search/?q=" + query
+      for auth in authstring.split("|"):
+        url = url + "&auths=" + auth
       return HttpResponseRedirect(url)
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
 
+      print("got p " + AccumuloCluster.objects.first().user + " " +  AccumuloCluster.objects.first().password )
       table = "shard"
 
       tableOperations = connector.tableOps(table)
@@ -889,7 +968,10 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       datatype = request.GET.get('dt')
       uid = request.GET.get('id')
       q = request.GET.get('query')
+      authstring = request.GET.get('auths')
       auths = pysharkbite.Authorizations()
+      if not authstring is None and len(authstring) > 0:
+        auths.addAuthorization(authstring)
       asyncQueue = queue.SimpleQueue()
       asyncQueue.put(Range(datatype,shard,uid))
  #     for auth in selectedauths:
@@ -902,7 +984,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       while not docs.empty():
         wanted_items.append(docs.get())
       # def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
-      context = {'shard':shard, 'uid' : uid, 'datatype' : datatype,'query': q , 'results' : wanted_items}
+      context = {'shard':shard, 'uid' : uid, 'datatype' : datatype,'query': q , 'auths': authstring,'results' : wanted_items}
       return render(request,'mutate_page.html',context)
 
 
@@ -970,7 +1052,7 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())  
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())  
       connector = pysharkbite.AccumuloConnector(user, zk)
 
       entry = request.GET.get('q')
@@ -1004,7 +1086,9 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       indexTableOps = connector.tableOps("shardIndex")
 
       auths = pysharkbite.Authorizations()
+      authlist = list()
       for auth in selectedauths:
+        authlist.append(auth)
         auths.addAuthorization(auth)
       start=time.time()
       indexLookupInformation=LookupInformation("shardIndex",auths,indexTableOps)
@@ -1034,7 +1118,9 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       userAuths = set()
       for authset in auths.authorizations.all():
           userAuths.add(authset)
-      context={'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry}
+      s="|"
+      authy= s.join(authlist)
+      context={'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry}
       return render(request,'search_results.html',context) 
       #return render_to_response('search_results.html', {'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry})
 # Create your views here.

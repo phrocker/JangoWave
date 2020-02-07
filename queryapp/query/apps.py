@@ -7,8 +7,8 @@ class QueryConfig(AppConfig):
       print("sleeping")
       populateMetadata.delay() 
       print("get field")  
-      populateFieldMetadata.delay()
-      pouplateEventCountMetadata.delay()
+      #populateFieldMetadata.delay()
+      #pouplateEventCountMetadata.delay()
       #import time
       #time.sleep(2)  
       # importing model classes

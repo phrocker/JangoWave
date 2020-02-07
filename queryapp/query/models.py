@@ -1,7 +1,8 @@
 # cities/models.py
+from django.core.exceptions import ValidationError
 from django.db import models
 import uuid
-
+from django import forms
 from django.db import models
 import json
 from django.conf import settings
@@ -36,6 +37,21 @@ class FileUpload(models.Model):
     def __str__(self):
       return self.uuid + "." +  filename  
 
+class AccumuloCluster(models.Model):
+     instance = models.CharField(max_length=255)
+     zookeeper = models.CharField(max_length=1024)
+     user = models.CharField(max_length=255)
+     password = models.CharField(max_length=255)
+  
+     def save(self, *args, **kwargs):
+        if not self.pk and AccumuloCluster.objects.exists():
+        # if you'll not check for self.pk 
+        # then error will also raised in update of exists model
+            raise ValidationError('There is can be only one AccumuloCluster instance')
+        return super(AccumuloCluster, self).save(*args, **kwargs)
+
+     def __str__(self):
+      return self.instance + "@" + self.zookeeper
 
 class Query(models.Model):
     name = models.CharField(max_length=2550)

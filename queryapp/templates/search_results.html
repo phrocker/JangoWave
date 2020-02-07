@@ -45,7 +45,7 @@ query took {{ time }} s
 <tr>
 <td>
 <pre id="json">
-<a onclick="openpage('Edit Document','/mutate?query={{query}}&shard={{result.shard}}&dt={{result.datatype}}&id={{result.uid}}')" href="#">{{result | pretty_json }}</a>
+<a onclick="openpage('Edit Document','/mutate?query={{query}}&shard={{result.shard}}&dt={{result.datatype}}&auths={{authstring}}&&id={{result.uid}}')" href="#">{{result | pretty_json }}</a>
 </pre>
 </td>
 </tr>

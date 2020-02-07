@@ -17,6 +17,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 <script>
 
+function deleteEvent(query,auths,shard,uid,datatype){
+    window.top.location.href  = "/delete?query=" + query + "&auths=" + auths + "&shard=" + shard + "&uid=" + uid + "&datatype=" + datatype;
+}
+
 function openpage(title, page){
 
 var $dialog = $('<div></div>')

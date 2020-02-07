@@ -27,7 +27,7 @@ app.autodiscover_tasks()
 
 
 def daterange(start_date, end_date):
-    for n in range(int ((end_date - start_date).days)):
+    for n in range(int ((end_date - start_date).days)+1):
         yield start_date + datetime.timedelta(n)
 
 def getDateRange(days : int ):
@@ -39,10 +39,8 @@ def getDateRange(days : int ):
   else:
     return daterange(adjusted_date,now_date)
 
-@shared_task
+@periodic_task(run_every=timedelta(minutes=45))
 def pouplateEventCountMetadata():
-      if not caches['metadata'].get("eventcount") is None:
-        return caches['metadata'].get("eventcount")
       import pysharkbite
       import time
       conf = pysharkbite.Configuration()
@@ -52,11 +50,9 @@ def pouplateEventCountMetadata():
       connector = pysharkbite.AccumuloConnector(user, zk)
       queryRanges = list()
       #last seven days
-      for dateinrange in getDateRange(-7):
+      for dateinrange in getDateRange(-15):
         shardbegin = dateinrange.strftime("%Y%m%d")
-        print( dateinrange.strftime("%Y%m%d") )
         if caches['eventcount'].get(shardbegin) is None:
-          print(shardbegin + " is not cached")
           queryRanges.append(shardbegin)
         else:
           pass # don't add to range
@@ -72,11 +68,9 @@ def pouplateEventCountMetadata():
         auths = pysharkbite.Authorizations()
         auths.addAuthorization("MTRCS")
 
-        print("oh")
         indexScanner = indexTableOps.createScanner(auths,100)
         start=time.time()
         for dt in queryRanges:
-          print("Creating range for " + dt)
           indexrange = pysharkbite.Range(dt,True,dt+"\uffff",False)
           indexScanner.addRange(indexrange)
         indexScanner.fetchColumn("EVENT_COUNT","")
@@ -94,7 +88,6 @@ def pouplateEventCountMetadata():
         for indexKeyValue in indexSet:
          value = indexKeyValue.getValue()
          key = indexKeyValue.getKey()
-         print ("row is " + key.getRow() + " " + key.getColumnFamily())
          if key.getColumnFamily() == "EVENT_COUNT":
            dt = key.getRow().split("_")[0]
            if dt in mapping:
@@ -103,13 +96,11 @@ def pouplateEventCountMetadata():
              mapping[dt] = int(value.get())
         arr = [None] * len(mapping.keys())
         for field in mapping:
-          print("Caching " + field + " " +  str(mapping[field]))
-          caches['eventcount'].set(field,str(mapping[field]),3600*24)
+          caches['eventcount'].set(field,str(mapping[field]),3600*1)
 
 
 @periodic_task(run_every=timedelta(seconds=5))
 def check():
-  print ("Checking")
   model = apps.get_model(app_label='query', model_name='FileUpload')
   objs = model.objects.filter(status="NEW")
   for obj in objs:
@@ -128,7 +119,6 @@ def check():
 
         indexScanner = indexTableOps.createScanner(auths,2)
 
-        print ("Looking up " + str(obj.uuid))
         indexrange = pysharkbite.Range(str(obj.uuid))
 
         indexScanner.addRange(indexrange)
@@ -168,11 +158,10 @@ def check():
               scanner.close()
 
         indexScanner.close()
-        print("file name is " + obj.originalfile)
 
 @shared_task
+@periodic_task(run_every=timedelta(seconds=60))
 def populateFieldMetadata():
-      print( "**fieldchart**")
       if not caches['metadata'].get("fieldchart") is None:
         return caches['metadata'].get("fieldchart")
       import time
@@ -187,7 +176,6 @@ def populateFieldMetadata():
 
       auths = pysharkbite.Authorizations()
 
-      print("oh")
       indexScanner = indexTableOps.createScanner(auths,100)
       start=time.time()
       indexrange = pysharkbite.Range()
@@ -230,7 +218,6 @@ def populateFieldMetadata():
 def populateMetadata():
       if not caches['metadata'].get("field") is None:
         return caches['metadata'].get("field")
-      print("oh")
       import pysharkbite      
       conf = pysharkbite.Configuration()
       conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
@@ -251,10 +238,8 @@ def populateMetadata():
       indexScanner.fetchColumn("f","")
 
       combinertxt=""
-      print ("starting")
         ## load the combiner from the file system and send it to accumulo
       with open('countgatherer.py', 'r') as file:
-        print("Adding combiner")
         combinertxt = file.read()
       combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
       indexScanner.addIterator(combiner)
@@ -286,7 +271,6 @@ def populateMetadata():
            except:
              pass
       caches['metadata'].set("field",json.dumps(mapping),3600)
-      print( json.dumps(mapping))
       return json.dumps(mapping)
 
 
