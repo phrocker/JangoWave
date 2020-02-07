@@ -1,0 +1,11 @@
+protobuf
+google-cloud
+dotenv
+django
+pyjnius
+pyparsing
+sortedcontainers
+django-adminlte3
+django-slick-admin
+django_redis
+django-celery
