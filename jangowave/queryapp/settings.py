@@ -160,5 +160,5 @@ LOGOUT_REDIRECT_URL = 'home'
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 STATIC_URL = '/static/'
-CELERY_BROKER_URL = 'redis://localhost'
+CELERY_BROKER_URL = 'redis://redis'
 STATIC_ROOT = os.path.join(PROJECT_ROOT, 'static')

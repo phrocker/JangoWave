@@ -44,9 +44,10 @@ def pouplateEventCountMetadata():
       import pysharkbite
       import time
       try:
+        AccumuloCluster = apps.get_model(app_label='query', model_name='AccumuloCluster')
         conf = pysharkbite.Configuration()
         conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+        zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
         user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
         connector = pysharkbite.AccumuloConnector(user, zk)
         queryRanges = list()
@@ -105,6 +106,7 @@ def pouplateEventCountMetadata():
 @periodic_task(run_every=timedelta(seconds=5))
 def check():
   model = apps.get_model(app_label='query', model_name='FileUpload')
+  AccumuloCluster = apps.get_model(app_label='query', model_name='AccumuloCluster')
   objs = model.objects.filter(status="NEW")
   for obj in objs:
       if obj.status == "NEW":
@@ -112,7 +114,7 @@ def check():
         try:
           conf = pysharkbite.Configuration()
           conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-          self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+          zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
           user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
           connector = pysharkbite.AccumuloConnector(user, zk)
 
@@ -171,10 +173,11 @@ def populateFieldMetadata():
       if not caches['metadata'].get("fieldchart") is None:
         return caches['metadata'].get("fieldchart")
       import time
+      AccumuloCluster = apps.get_model(app_label='query', model_name='AccumuloCluster')
       import pysharkbite
       conf = pysharkbite.Configuration()
       conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-      self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+      zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
       user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
 
@@ -229,8 +232,8 @@ def populateMetadata():
       try:
         conf = pysharkbite.Configuration()
         conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-
-        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+        AccumuloCluster = apps.get_model(app_label='query', model_name='AccumuloCluster')
+        zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
         user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
         connector = pysharkbite.AccumuloConnector(user, zk)
 
