@@ -43,60 +43,63 @@ def getDateRange(days : int ):
 def pouplateEventCountMetadata():
       import pysharkbite
       import time
-      conf = pysharkbite.Configuration()
-      conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-      zk = pysharkbite.ZookeeperInstance("muchos", "mycluster-LeaderZK-1:2181,mycluster-LeaderZK-3:2181", 1000, conf)
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, zk)
-      queryRanges = list()
-      #last seven days
-      for dateinrange in getDateRange(-15):
-        shardbegin = dateinrange.strftime("%Y%m%d")
-        if caches['eventcount'].get(shardbegin) is None:
-          queryRanges.append(shardbegin)
-        else:
-          pass # don't add to range
-
-      if len(queryRanges) > 0:
-        ## all is cached
-
-        user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      try:
+        conf = pysharkbite.Configuration()
+        conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+        user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
         connector = pysharkbite.AccumuloConnector(user, zk)
+        queryRanges = list()
+        #last seven days
+        for dateinrange in getDateRange(-15):
+          shardbegin = dateinrange.strftime("%Y%m%d")
+          if caches['eventcount'].get(shardbegin) is None:
+            queryRanges.append(shardbegin)
+          else:
+            pass # don't add to range
 
-        indexTableOps = connector.tableOps("DatawaveMetrics")
+        if len(queryRanges) > 0:
+          ## all is cached
 
-        auths = pysharkbite.Authorizations()
-        auths.addAuthorization("MTRCS")
+          user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+          connector = pysharkbite.AccumuloConnector(user, zk)
 
-        indexScanner = indexTableOps.createScanner(auths,100)
-        start=time.time()
-        for dt in queryRanges:
-          indexrange = pysharkbite.Range(dt,True,dt+"\uffff",False)
-          indexScanner.addRange(indexrange)
-        indexScanner.fetchColumn("EVENT_COUNT","")
+          indexTableOps = connector.tableOps("DatawaveMetrics")
 
-        combinertxt=""
-        ## load the combiner from the file system and send it to accumulo
-        with open('metricscombiner.py', 'r') as file:
-          combinertxt = file.read()
-        combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-        indexScanner.addIterator(combiner)
-        indexSet = indexScanner.getResultSet()
+          auths = pysharkbite.Authorizations()
+          auths.addAuthorization("MTRCS")
 
-        counts=0
-        mapping={}
-        for indexKeyValue in indexSet:
-         value = indexKeyValue.getValue()
-         key = indexKeyValue.getKey()
-         if key.getColumnFamily() == "EVENT_COUNT":
-           dt = key.getRow().split("_")[0]
-           if dt in mapping:
-              mapping[dt] += int(value.get())
-           else:
-             mapping[dt] = int(value.get())
-        arr = [None] * len(mapping.keys())
-        for field in mapping:
-          caches['eventcount'].set(field,str(mapping[field]),3600*1)
+          indexScanner = indexTableOps.createScanner(auths,100)
+          start=time.time()
+          for dt in queryRanges:
+            indexrange = pysharkbite.Range(dt,True,dt+"\uffff",False)
+            indexScanner.addRange(indexrange)
+          indexScanner.fetchColumn("EVENT_COUNT","")
+
+          combinertxt=""
+          ## load the combiner from the file system and send it to accumulo
+          with open('metricscombiner.py', 'r') as file:
+            combinertxt = file.read()
+          combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
+          indexScanner.addIterator(combiner)
+          indexSet = indexScanner.getResultSet()
+
+          counts=0
+          mapping={}
+          for indexKeyValue in indexSet:
+            value = indexKeyValue.getValue()
+            key = indexKeyValue.getKey()
+            if key.getColumnFamily() == "EVENT_COUNT":
+              dt = key.getRow().split("_")[0]
+              if dt in mapping:
+                  mapping[dt] += int(value.get())
+              else:
+                mapping[dt] = int(value.get())
+          arr = [None] * len(mapping.keys())
+          for field in mapping:
+            caches['eventcount'].set(field,str(mapping[field]),3600*1)
+      except:
+        pass
 
 
 @periodic_task(run_every=timedelta(seconds=5))
@@ -106,58 +109,61 @@ def check():
   for obj in objs:
       if obj.status == "NEW":
         import pysharkbite
-        conf = pysharkbite.Configuration()
-        conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-        zk = pysharkbite.ZookeeperInstance("muchos", "mycluster-LeaderZK-1:2181,mycluster-LeaderZK-3:2181", 1000, conf)
-        user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
-        connector = pysharkbite.AccumuloConnector(user, zk)
+        try:
+          conf = pysharkbite.Configuration()
+          conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+          self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+          user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+          connector = pysharkbite.AccumuloConnector(user, zk)
 
-        indexTableOps = connector.tableOps("provenanceIndex")
+          indexTableOps = connector.tableOps("provenanceIndex")
 
-        auths = pysharkbite.Authorizations()
-        auths.addAuthorization("PROV")
+          auths = pysharkbite.Authorizations()
+          auths.addAuthorization("PROV")
 
-        indexScanner = indexTableOps.createScanner(auths,2)
+          indexScanner = indexTableOps.createScanner(auths,2)
 
-        indexrange = pysharkbite.Range(str(obj.uuid))
+          indexrange = pysharkbite.Range(str(obj.uuid))
 
-        indexScanner.addRange(indexrange)
-        indexSet = indexScanner.getResultSet()
+          indexScanner.addRange(indexrange)
+          indexSet = indexScanner.getResultSet()
 
-        rangelist = list()
-        provops = connector.tableOps("provenance")
-        scanner = provops.createScanner(auths,10)
-        for indexKeyValue in indexSet:
-         value = indexKeyValue.getValue()
-         protobuf = Uid_pb2.List()
-         protobuf.ParseFromString(value.get().encode())
-         for uidvalue in protobuf.UID:
-              shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
-              datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
-              startKey = pysharkbite.Key()
-              stopKey = pysharkbite.Key()
-              startKey.setRow(shard)
-              stopKey.setRow(shard)
-              startKey.setColumnFamily(datatype + "\x00" + uidvalue)
-              stopKey.setColumnFamily(datatype + "\x00" + uidvalue + "\xff")
-              rangelist.append( pysharkbite.Range(startKey,True,stopKey,False))
-              scanner = provops.createScanner(auths,10)              
-              scanner.addRange( pysharkbite.Range(startKey,True,stopKey,False))
-              resultset = scanner.getResultSet()
-              for keyvalue in resultset:
-                key = keyvalue.getKey()
-                value = keyvalue.getValue()
-                eventid = key.getColumnFamily().split("\u0000")[1];
-                fieldname = key.getColumnQualifier().split("\u0000")[0];
-                fieldvalue = key.getColumnQualifier().split("\u0000")[1];
-                if (fieldname == "EVENTTYPE"):
-                  if fieldvalue == "DROP":
-                    obj.status="COMPLETE" 
-                    obj.save()
-                    break
-              scanner.close()
+          rangelist = list()
+          provops = connector.tableOps("provenance")
+          scanner = provops.createScanner(auths,10)
+          for indexKeyValue in indexSet:
+            value = indexKeyValue.getValue()
+            protobuf = Uid_pb2.List()
+            protobuf.ParseFromString(value.get().encode())
+            for uidvalue in protobuf.UID:
+                shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
+                datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+                startKey = pysharkbite.Key()
+                stopKey = pysharkbite.Key()
+                startKey.setRow(shard)
+                stopKey.setRow(shard)
+                startKey.setColumnFamily(datatype + "\x00" + uidvalue)
+                stopKey.setColumnFamily(datatype + "\x00" + uidvalue + "\xff")
+                rangelist.append( pysharkbite.Range(startKey,True,stopKey,False))
+                scanner = provops.createScanner(auths,10)              
+                scanner.addRange( pysharkbite.Range(startKey,True,stopKey,False))
+                resultset = scanner.getResultSet()
+                for keyvalue in resultset:
+                  key = keyvalue.getKey()
+                  value = keyvalue.getValue()
+                  eventid = key.getColumnFamily().split("\u0000")[1];
+                  fieldname = key.getColumnQualifier().split("\u0000")[0];
+                  fieldvalue = key.getColumnQualifier().split("\u0000")[1];
+                  if (fieldname == "EVENTTYPE"):
+                    if fieldvalue == "DROP":
+                      obj.status="COMPLETE" 
+                      obj.save()
+                      break
+                scanner.close()
 
-        indexScanner.close()
+          indexScanner.close()
+        except:
+          pass
 
 @shared_task
 @periodic_task(run_every=timedelta(seconds=60))
@@ -168,8 +174,8 @@ def populateFieldMetadata():
       import pysharkbite
       conf = pysharkbite.Configuration()
       conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-      zk = pysharkbite.ZookeeperInstance("muchos", "mycluster-LeaderZK-1:2181,mycluster-LeaderZK-3:2181", 1000, conf)
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+      self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, zk)
 
       indexTableOps = connector.tableOps("DatawaveMetadata")
@@ -218,59 +224,62 @@ def populateFieldMetadata():
 def populateMetadata():
       if not caches['metadata'].get("field") is None:
         return caches['metadata'].get("field")
-      import pysharkbite      
-      conf = pysharkbite.Configuration()
-      conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-
-      zk = pysharkbite.ZookeeperInstance("muchos", "mycluster-LeaderZK-1:2181,mycluster-LeaderZK-3:2181", 1000, conf)
-      user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, zk)
-
-      indexTableOps = connector.tableOps("DatawaveMetadata")
-
-      auths = pysharkbite.Authorizations()
-
-
-      indexScanner = indexTableOps.createScanner(auths,100)
-      indexrange = pysharkbite.Range()
-
-      indexScanner.addRange(indexrange)
-      indexScanner.fetchColumn("f","")
-
-      combinertxt=""
-        ## load the combiner from the file system and send it to accumulo
-      with open('countgatherer.py', 'r') as file:
-        combinertxt = file.read()
-      combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-      indexScanner.addIterator(combiner)
-      indexSet = indexScanner.getResultSet()
-      import json
-      counts=0
       mapping={}
-      for indexKeyValue in indexSet:
-       value = indexKeyValue.getValue()
-       key = indexKeyValue.getKey()
-       if key.getColumnFamily() == "f":
-         day = key.getColumnQualifier().split("\u0000")[1]
-         dt = key.getColumnQualifier().split("\u0000")[0]
-         if day in mapping:
-           if key.getRow() in mapping[day]:
-            try:
-              mapping[day][key.getRow()] += int( value.get() )
-            except:
-              pass
-           else:
-            try:
-              mapping[day][key.getRow()] = int( value.get() )
-            except:
-              pass
-         else:
-           mapping[day]={}
-           try:
-             mapping[day][key.getRow()] = int( value.get() )
-           except:
-             pass
-      caches['metadata'].set("field",json.dumps(mapping),3600)
+      import pysharkbite      
+      try:
+        conf = pysharkbite.Configuration()
+        conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+
+        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+        user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+        connector = pysharkbite.AccumuloConnector(user, zk)
+
+        indexTableOps = connector.tableOps("DatawaveMetadata")
+
+        auths = pysharkbite.Authorizations()
+
+
+        indexScanner = indexTableOps.createScanner(auths,100)
+        indexrange = pysharkbite.Range()
+
+        indexScanner.addRange(indexrange)
+        indexScanner.fetchColumn("f","")
+
+        combinertxt=""
+          ## load the combiner from the file system and send it to accumulo
+        with open('countgatherer.py', 'r') as file:
+          combinertxt = file.read()
+        combiner=pysharkbite.PythonIterator("MetadataCounter",combinertxt,200)
+        indexScanner.addIterator(combiner)
+        indexSet = indexScanner.getResultSet()
+        import json
+        counts=0
+        for indexKeyValue in indexSet:
+          value = indexKeyValue.getValue()
+          key = indexKeyValue.getKey()
+          if key.getColumnFamily() == "f":
+            day = key.getColumnQualifier().split("\u0000")[1]
+            dt = key.getColumnQualifier().split("\u0000")[0]
+            if day in mapping:
+              if key.getRow() in mapping[day]:
+                try:
+                  mapping[day][key.getRow()] += int( value.get() )
+                except:
+                  pass
+              else:
+                try:
+                  mapping[day][key.getRow()] = int( value.get() )
+                except:
+                  pass
+            else:
+              mapping[day]={}
+              try:
+                mapping[day][key.getRow()] = int( value.get() )
+              except:
+                pass
+        caches['metadata'].set("field",json.dumps(mapping),3600)
+      except:
+        pass
       return json.dumps(mapping)
 
 

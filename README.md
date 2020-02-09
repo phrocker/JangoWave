@@ -26,3 +26,5 @@ Run ./build.sh from root or the following commands:
 
 Please note that you will need to run docker-compose run web createsuperuser to create your first
 user
+    
+    docker-compose run web migrate.py createsuperuser

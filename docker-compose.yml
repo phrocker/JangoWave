@@ -14,6 +14,14 @@ services:
       - "2181"
     depends_on:
       - db
+  celery:
+    build: .
+    command:  celery -A query.celery worker -c 2 -E -B
+    volumes:
+      - jango:/jangowave1
+    depends_on:
+      - db
+      - redis
   redis:
     restart: always
     image: redis:latest
