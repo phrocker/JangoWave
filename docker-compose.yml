@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  db:
+    image: postgres
+  web:
+    build: .
+    command: python3.7 manage.py runserver 0.0.0.0:8000
+    volumes:
+      - jango:/jangowave1
+    ports:
+      - "8000:8000"
+      - "9997-9999"
+      - "2181"
+    depends_on:
+      - db
+  redis:
+    restart: always
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+volumes:
+  redisdata:
+  jango:

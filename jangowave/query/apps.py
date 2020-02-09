@@ -5,7 +5,7 @@ class QueryConfig(AppConfig):
     name = 'query'
     def ready(self):
       print("sleeping")
-      populateMetadata.delay() 
+     # populateMetadata.delay() 
       print("get field")  
       #populateFieldMetadata.delay()
       #pouplateEventCountMetadata.delay()

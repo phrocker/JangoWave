@@ -1,19 +1,28 @@
-# djangowave
-Datawave on DJango
+# JangoWave
+Apache Accumulo Query application built in python. 
 
-# Requirements
-python3.7+
+## Requirements
 
-django
+    celery
+    protobuf
+    sharkbite
+    google-cloud
+    django==2.2.10
+    pyparsing
+    sortedcontainers
+    django-adminlte3
+    django-slick-admin
+    django-stronghold
+    luqum
+    django_redis
 
-pysharkbite ( pip install sharkbite )
+### Building
 
-django-slick-admin
+Run ./build.sh from root or the following commands:
 
-pyjnius
+    docker-compose build --force-rm --no-cache && docker-compose up --detach
+    docker-compose run web migrate.py makemigrations
+    docker-compose run web migrate.py migrate
 
-pyparsing
-
-sortedcontainers
-
-django-adminlte3
+Please note that you will need to run docker-compose run web createsuperuser to create your first
+user

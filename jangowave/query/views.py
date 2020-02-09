@@ -4,7 +4,6 @@ from django.core import serializers
 from django.contrib.auth.decorators import user_passes_test
 from django.template import RequestContext
 from django.core.cache import caches
-import matplotlib.pyplot as plt
 import random
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -20,17 +19,13 @@ import itertools
 import os
 import traceback
 import sys
-sys.path.insert(1, '/home/centos/')
-sys.path.insert(1, '/usr/local/lib/python3.7/site-packages/')
 import Uid_pb2
 import time
 import datetime
 import json
 from django.http import JsonResponse
 from concurrent.futures import ThreadPoolExecutor
-#from multiprocessing import Queue
 import multiprocessing
-# cities/views.py
 from django.views.generic import TemplateView, ListView, View
 
 from stronghold.views import StrongholdPublicMixin
@@ -60,17 +55,35 @@ resolver = UnknownOperationResolver()
 import faulthandler
 faulthandler.enable()
 
-import jnius_config
-#jnius_config.set_classpath('.', '/home/centos/datawave-ws-deploy-application-3.1.0-SNAPSHOT/ear/*')
-#jnius_config.set_classpath('.', '/home/centos/datawave-ws-deploy-application-3.1.0-SNAPSHOT/ear/lib/*')
-jnius_config.set_classpath('.', '/home/centos/datawave-dev-3.1.0-SNAPSHOT/lib/*')
-import jnius
+#### **** import jnius_config
+#### **** jnius_config.set_classpath('.', '/home/centos/datawave-dev-3.1.0-SNAPSHOT/lib/*')
+#### **** import jnius
 
 
 
 import pysharkbite
 
 
+def getOrSetZookeeper():
+  
+  return zk
+
+class ZkInstance(object):
+    _instance = None    
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if ZkInstance._instance is None:
+            with ZkInstance._lock:
+                if ZkInstance._instance is None:
+                    ZkInstance._instance = super(ZkInstance, cls).__new__(cls)
+        return ZkInstance._instance
+
+    def __init__(self):
+        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+
+    def get(self):
+        return self.zk
 
 def runningWorkers(workers):
   for worker in workers:
@@ -610,7 +623,7 @@ conf = pysharkbite.Configuration()
 
 conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
 
-zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+#zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
 
 #pysharkbite.LoggingConfiguration.enableTraceLogger()
 
@@ -626,10 +639,14 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):    
       #auths =  UserAuths.objects.get(name=request.user)
-      auths =  UserAuths.objects.get(name=request.user)
       userAuths = set()
-      for authset in auths.authorizations.all():
-          userAuths.add(authset)
+      try:
+        auths =  UserAuths.objects.get(name=request.user)
+
+        for authset in auths.authorizations.all():
+            userAuths.add(authset)
+      except:
+        pass
       context = { 'admin': request.user.is_superuser, 'authenticated':True, 'userAuths': userAuths }
       return render(request,self.template_name,context) 
 
@@ -839,8 +856,8 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
       url = "/search/?q=" + query
       auths = pysharkbite.Authorizations()
       auths.addAuthorization(authstring)
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, zk) 
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get()) 
       tableOps = connector.tableOps("shard")
       scanner = tableOps.createScanner(auths,1)
       startKey = pysharkbite.Key(row=shard)
@@ -900,8 +917,8 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
           pass
         else:
           news[key] = value
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, zk)
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
       auths = pysharkbite.Authorizations()
       #for auth in 
@@ -918,7 +935,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       mutation = pysharkbite.Mutation(shard);    
       diff=0
       for key,value in news.items():
-#        print (" for " + key + " we have " + news[key] + " " + originals[key] + " " + datatype + " " + uid)
+
         if news[key] != originals[key]:
           import datetime;
           ts = int( datetime.datetime.now().timestamp())*1000
@@ -957,10 +974,9 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       return HttpResponseRedirect(url)
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, zk)
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
-      print("got p " + AccumuloCluster.objects.first().user + " " +  AccumuloCluster.objects.first().password )
       table = "shard"
 
       tableOperations = connector.tableOps(table)
@@ -1046,14 +1062,14 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
     model = Query
     template_name = 'search_results.html'    
     
-    @method_decorator(login_required)
+    @method_decorator(login_required) 
     def dispatch(self, *args, **kwargs):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, zk.getInstanceId())  
-      connector = pysharkbite.AccumuloConnector(user, zk)
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())  
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
       entry = request.GET.get('q')
       selectedauths = request.GET.getlist('auths')
@@ -1066,17 +1082,17 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       print("query is " + entry)
         
 
-      try:
-        LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
+     # try:
+        #LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
   
-        luceneparser = LuceneToJexlQueryParser()
+        #luceneparser = LuceneToJexlQueryParser()
 
-        node = luceneparser.parse(entry)
+       # node = luceneparser.parse(entry)
 
-        jexl = node.getOriginalQuery()
-        print("Jexl is " + jexl)
-      except:
-        pass
+        #jexl = node.getOriginalQuery()
+        #print("Jexl is " + jexl)
+     # except:
+      #  pass
       indexLookup = 1
 
       table = "shard"
@@ -1109,9 +1125,7 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       while not docs.empty():
         wanted_items.append(docs.get())
         counts=counts+1
-      print ("technically finished with " + str(counts))
-      #return Query.objects.filter(pk__in = wanted_items)
-#      return JsonResponse(events)
+
       nxt=""
       prv=""
       auths =  UserAuths.objects.get(name=request.user)

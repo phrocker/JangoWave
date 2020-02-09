@@ -1,11 +1,12 @@
+celery
 protobuf
+sharkbite
 google-cloud
-dotenv
-django
-pyjnius
+django==2.2.10
 pyparsing
 sortedcontainers
 django-adminlte3
 django-slick-admin
+django-stronghold
+luqum
 django_redis
-django-celery
