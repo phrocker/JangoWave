@@ -1,6 +1,10 @@
 version: '3'
 
 services:
+  nifi:
+    image: apache/nifi:latest
+    ports:
+      - "8080:8080" # Unsecured HTTP Web Port
   db:
     image: postgres
   web:
@@ -12,8 +16,10 @@ services:
       - "8000:8000"
       - "9997-9999"
       - "2181"
+      - "8181"
     depends_on:
       - db
+      - nifi
   celery:
     build: .
     command:  celery -A query.celery worker -c 2 -E -B

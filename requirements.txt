@@ -9,4 +9,5 @@ django-adminlte3
 django-slick-admin
 django-stronghold
 luqum
+nipyapi
 django_redis
