@@ -2,13 +2,15 @@ version: '3'
 
 services:
   nifi:
-    image: apache/nifi:latest
+    image: phrocker/nifi-jangowave:latest
     ports:
       - "8080:8080" # Unsecured HTTP Web Port
   db:
     image: postgres
   web:
-    build: .
+    build:
+      context: "."
+      dockerfile: "Dockerfile.jangowave"
     command: python3.7 manage.py runserver 0.0.0.0:8000
     volumes:
       - jango:/jangowave1
