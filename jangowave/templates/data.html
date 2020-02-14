@@ -9,6 +9,34 @@
 <script type="text/javascript">
   loadCharts();
 </script>
+<div class="row">
+  <div class="col-md-6">
+      <div class="info-box bg-gradient-warning">
+      <span class="info-box-icon"><i class="far fa-copy"></i></span>
+      <div class="info-box-content">
+      <span class="info-box-text">Files Ingested</span>
+      <div class="progress">
+      <div class="progress-bar" style="width: {{ingestcomplete}}%"></div>
+    </div>
+      <span class="info-box-number">{{ingestcount}}</span>
+     </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="small-box bg-info">
+  <div class="inner">
+    <h3>{{useruploads}}</h3>
+    <p>User uploads</p>
+  </div>
+  <div class="icon">
+    <i class="fas fa-user-plus"></i>
+  </div>
+  <!--<a href="/files/status" class="small-box-footer">
+    Your Uploads <i class="fas fa-arrow-circle-right"></i>
+  </a>-->
+</div>
+  </div>
+</div>
      <div class="row">
         <div class="col-md-6">
           <!-- AREA CHART -->
