@@ -5,6 +5,7 @@ services:
     image: phrocker/nifi-jangowave:latest
     ports:
       - "8080:8080" # Unsecured HTTP Web Port
+      - "8181:8181" # Unsecured HTTP Web Port
   db:
     image: postgres
   web:

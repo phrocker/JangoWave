@@ -11,6 +11,7 @@ import Uid_pb2
 import time
 import datetime
 import json
+import requests
 from django.utils.decorators import method_decorator
 
 from django.core import serializers
@@ -30,12 +31,8 @@ import multiprocessing
 from django.views.generic import TemplateView, ListView, View
 from stronghold.views import StrongholdPublicMixin
 import threading
-from .models import FileUpload
-from .models import AccumuloCluster
+from .models import FileUpload, AccumuloCluster, Query, UserAuths, Auth, IngestConfiguration
 from .forms import DocumentForm
-from .models import Query
-from .models import UserAuths
-from .models import Auth
 from .rangebuilder import *
 from luqum.parser import lexer, parser, ParseError
 from luqum.pretty import prettify
@@ -63,7 +60,7 @@ import pysharkbite
 
 
 class ZkInstance(object):
-    _instance = None    
+    _instance = None
     _lock = threading.Lock()
 
     def __new__(cls):
@@ -109,7 +106,7 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
     if fv.endswith("*"):
       base = fv.replace('*', '')
       indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
-    else: 
+    else:
       indexrange = pysharkbite.Range(rng.getValue().lower())
 
     indexScanner.addRange(indexrange)
@@ -123,7 +120,7 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
        protobuf.ParseFromString(value.get().encode())
        for uidvalue in protobuf.UID:
             shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
-            datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]            
+            datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
             output.put( Range(datatype,shard,uidvalue))
     indexScanner.close()
 
@@ -161,17 +158,17 @@ class OrIterator(LookupIterator):
                 if isinstance(rng,RangeLookup):
                   result = loop.run_in_executor(pool, lookupRange,indexLookupInformation, rng, queue)
                 elif isinstance(rng,LookupIterator):
-                  rng.getRanges(indexLookupInformation,queue)  
-       
+                  rng.getRanges(indexLookupInformation,queue)
+
 
 def intersect_sets(seqs):
    if not seqs: return   # No items
    iterators =  [ForwardIterator(seq) for seq in seqs]
    first, rest = iterators[0], iterators[1:]
-   for item in first: 
+   for item in first:
        candidates = list(rest)
        while candidates:
-           if any(c.peek() is EndOfIter for c in candidates):   
+           if any(c.peek() is EndOfIter for c in candidates):
             return  # Exhausted an iterator
            candidates = [c for c in candidates if c.peek() < item]
            for c in candidates:
@@ -179,6 +176,7 @@ def intersect_sets(seqs):
        # Out of loop if first item in remaining iterator are all >= item.
        if all(it.peek() == item for it in rest):
            yield item
+
 def lookupRanges(lookupInformation : LookupInformation, ranges : list, output ) -> None:
     index_table_ops = lookupInformation.getTableOps()
 
@@ -191,7 +189,7 @@ def lookupRanges(lookupInformation : LookupInformation, ranges : list, output ) 
         itrs[count] = ForwardIterator(rng)
         scnrs[count]=None
         count=count+1
-      else:  
+      else:
         scnrs[count] = index_table_ops.createScanner(lookupInformation.getAuths(),1)
         fv = rng.getValue()
         if fv.endswith("*"):
@@ -223,7 +221,7 @@ class AndIterator(LookupIterator):
 
     def __init__(self,rng,lookupInfo):
       super(LookupIterator,self).__init__(rng,lookupInfo)
-  
+
     def __init__(self):
         self._rangeQueue=list()
 
@@ -242,7 +240,7 @@ class AndIterator(LookupIterator):
            for c in candidates: c.next()
        # Out of loop if first item in remaining iterator are all >= item.
        if all(it.peek() == item for it in rest):
-           yield item      
+           yield item
 
     def getRanges(self,indexLookupInformation : LookupInformation, queue : queue.SimpleQueue):
         if len(self._rangeQueue)==0:
@@ -257,7 +255,7 @@ class IndexLookup(LuceneTreeVisitorV2):
         pass
     def visit_and_operation(self, *args, **kwargs):
         return self._binary_operation("AND", *args, **kwargs)
-    
+
     def visit_or_operation(self, *args, **kwargs):
         return self._binary_operation("OR", *args, **kwargs)
 
@@ -278,13 +276,13 @@ class IndexLookup(LuceneTreeVisitorV2):
         items = [self.visit(child, parents + [node], child_context) for child in
                  children]
         #We are selecting columns
-  
+
         for lookup in items:
             ## add iterators
             if isinstance(lookup, LookupIterator):
                iter.addRange(lookup)
             elif lookup.getValue() == "or":
-                pass    
+                pass
         #    iter = OrIterator()
             elif lookup.getValue() == "and":
                 pass # :witer = AndIterator()
@@ -360,7 +358,7 @@ class IndexLookup(LuceneTreeVisitorV2):
         :return:
         """
         for child in children:
-            
+
             if type(child) is type(current_node):
                 yield from self.simplify_if_same(child.children, current_node)
             else:
@@ -369,26 +367,26 @@ class IndexLookup(LuceneTreeVisitorV2):
     def visit_search_field(self, node, parents, context):
         #child_context = dict(context) if context is not None else {}
         #enode = self.visit(node.children[0], parents + [node], child_context)
-        
+
         field = node.name
         value = node.expr.value
         if value == "*":
             raise Exception("Do not support unlimited range queries")
 
-        return RangeLookup(field,value) 
+        return RangeLookup(field,value)
 
 
     def visit_word(self, node, parents, context):
         # we've arrived here because of an unfielded query
         # or because of invalid syntax in lucene query
-        
+
         value = node.value
         if value == "*":
             raise Exception("Do not support unlimited range queries")
 
-        
 
-        return RangeLookup(None,value) 
+
+        return RangeLookup(None,value)
 
 
 def produceShardRanges(cancellationtoken : CancellationToken,indexLookupInformation : LookupInformation,output : queue.SimpleQueue, iterator: LookupIterator):
@@ -403,7 +401,7 @@ def produceShardRanges(cancellationtoken : CancellationToken,indexLookupInformat
             except:
               break
         cancellationtoken.cancel()
-        
+
 
 def scanDoc(scanner, outputQueue):
     resultset = scanner.getResultSet()
@@ -415,7 +413,7 @@ def scanDoc(scanner, outputQueue):
           continue
         jsonpayload = json.loads(value.get())
         outputQueue.put( jsonpayload )
-    
+
         count=count+1
 
     scanner.close()
@@ -462,10 +460,10 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
               endKey.setRow(docInfo.getShard())
               endKey.setColumnFamily(docid + "\xff")
               rng = pysharkbite.Range(startKey,True,endKey,True)
-  
+
               scanner.addRange(rng)
               rangecount=rangecount+1
-      
+
             except:
               rangecount=11
 
@@ -477,7 +475,7 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
           count = count + scanDoc(scanner,outputQueue)
         else:
           time.sleep(0.5)
-      
+
     except:
       e = sys.exc_info()[0]
   return True
@@ -567,7 +565,7 @@ def lookup(indexLookupInformation : LookupInformation, docLookupInformation : Lo
       try:
          if not intermediateQueue.empty():
           doc = intermediateQueue.get()
-          
+
           documents.put(doc)
           counts=counts+1
          else:
@@ -602,14 +600,14 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
       return super(TemplateView, self).dispatch(*args, **kwargs)
 
     @method_decorator(login_required)
-    def get(self, request, *args, **kwargs):    
+    def get(self, request, *args, **kwargs):
       #auths =  UserAuths.objects.get(name=request.user)
       auths =  UserAuths.objects.get(name=request.user)
       userAuths = set()
       for authset in auths.authorizations.all():
           userAuths.add(authset)
       context = { 'admin': request.user.is_superuser, 'authenticated':True, 'userAuths': userAuths }
-      return render(request,self.template_name,context) 
+      return render(request,self.template_name,context)
 
 
 
@@ -618,7 +616,7 @@ class UserAuthsView(TemplateView):
     login_url = '/accounts/login/'
     redirect_field_name = 'login'
     template_name = 'authorizations.html'
-  
+
     @method_decorator(login_required)
     def dispatch(self, *args, **kwargs):
      return super(TemplateView, self).dispatch(*args, **kwargs)
@@ -649,13 +647,13 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
           ingestcomplete = 0
       else:
           ingestcomplete = int(cachedVal)
-      
+
       cachedVal = caches['eventcount'].get("useruploads")
       if cachedVal is None:
           useruploads = 0
       else:
           useruploads = int(cachedVal)
-      
+
       context = {'useruploads':useruploads,'ingestcomplete': ingestcomplete,'ingestcount': ingestcount, 'admin': request.user.is_superuser, 'authenticated':True}
       return render(request,self.template_name,context)
 
@@ -755,13 +753,13 @@ class MetadataChartView(JSONResponseMixin,TemplateView):
       #last seven days
       for dateinrange in getDateRange(-7):
         queryRanges.append(dateinrange.strftime("%Y%m%d"))
-     
+
       mapping = {}
       if caches['metadata'].get("fieldchart") is None:
         mapping = {}
       else:
         mapping = json.loads(caches['metadata'].get("fieldchart") )
-      
+
       arr = [None] * len(mapping.keys())
       fields = [None] * len(mapping.keys())
       counts = 0
@@ -777,7 +775,7 @@ class MetadataChartView(JSONResponseMixin,TemplateView):
       returnval = [1]
       ret = {}
       ret["backgroundColor"]=colors
-      ret["label"] = "Distribution of data" 
+      ret["label"] = "Distribution of data"
       ret["data"] = arr
       returnval[0] = ret
       return (fields,returnval) #render_to_response('data.html', { 'metadata': mapping })
@@ -804,7 +802,7 @@ class FieldMetadataView(StrongholdPublicMixin,TemplateView):
 
       context={ 'admin': request.user.is_superuser, 'authenticated':True, 'metadata': json.loads(metadata) }
       return render(request,'fieldmetadata.html',context)
-        
+
 
 class DeleteEventView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -828,7 +826,7 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
       user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get()) 
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
       tableOps = connector.tableOps("shard")
       scanner = tableOps.createScanner(auths,1)
       startKey = pysharkbite.Key(row=shard)
@@ -892,7 +890,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
       auths = pysharkbite.Authorizations()
-      #for auth in 
+      #for auth in
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
 
@@ -902,7 +900,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       index_table_ops = connector.tableOps(index_table)
       writer = table_operations.createWriter(auths, 10)
       indexWriter = index_table_ops.createWriter(auths,5)
-      mutation = pysharkbite.Mutation(shard);    
+      mutation = pysharkbite.Mutation(shard);
       diff=0
       for key,value in news.items():
         if news[key] != originals[key]:
@@ -956,16 +954,12 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
         auths.addAuthorization(authstring)
       asyncQueue = queue.SimpleQueue()
       asyncQueue.put(Range(datatype,shard,uid))
- #     for auth in selectedauths:
-  #      auths.addAuthorization(auth)
-   #   start=time.time()
       shardLookupInformation=LookupInformation(table,auths,table_operations)
-      docs = queue.SimpleQueue() 
-      getDoc(shardLookupInformation,asyncQueue,docs)  
+      docs = queue.SimpleQueue()
+      getDoc(shardLookupInformation,asyncQueue,docs)
       wanted_items=list()
       while not docs.empty():
         wanted_items.append(docs.get())
-      # def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
       context = {'shard':shard, 'uid' : uid, 'datatype' : datatype,'query': q , 'auths': authstring,'results' : wanted_items}
       return render(request,'mutate_page.html',context)
 
@@ -985,7 +979,19 @@ class FileUploadView(StrongholdPublicMixin,TemplateView):
         form = DocumentForm(request.POST, request.FILES)
         if form.is_valid():
             form.save()
+            for config in IngestConfiguration.objects.all():
+                if len(config.post_location) > 0:
+                    ## upload the file to another location  and then
+                    ## change the status
+                    files = FileUpload.objects.filter(status="NEW")
+                    if not Files is None:
+                        for file in files:
+                            upl_files = {'file': open(file.path,'rb')}
+                            requests.post(config.post_location,files=upl_files)
+                            file.status="UPLOADED"
+                            file.save()
             return HttpResponseRedirect('/files/status')
+
         context = {'admin': request.user.is_superuser, 'authenticated':True, 'form' : form}
         return render(request, self.template_name, context)
 
@@ -1009,13 +1015,13 @@ class FileStatusView(StrongholdPublicMixin,TemplateView):
     def get(self, request, *args, **kwargs):
       form = DocumentForm()
       objs = FileUpload.objects.all()
-      #objs = FileUpload.objects.all().order_by("status") 
+      #objs = FileUpload.objects.all().order_by("status")
       for obj in objs:
         if len(obj.originalfile)==0:
           ind = obj.document.name.split("_")
           if len(ind) == 2:
             obj.originalfile = ind[1]
-            obj.save()   
+            obj.save()
       context = {'admin': request.user.is_superuser, 'authenticated':True, 'uploads': objs}
       return render(request, self.template_name, context)
 
@@ -1024,15 +1030,15 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
     redirect_field_name = 'login'
     model = Query
-    template_name = 'search_results.html'    
-    
+    template_name = 'search_results.html'
+
     @method_decorator(login_required)
     def dispatch(self, *args, **kwargs):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())  
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
       entry = request.GET.get('q')
@@ -1043,11 +1049,11 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
         skip=0
       field = request.GET.get('f')
 
-        
+
 
      # try:
      #  LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
-  
+
      #  luceneparser = LuceneToJexlQueryParser()
 
      #   node = luceneparser.parse(entry)
@@ -1055,7 +1061,7 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
      #   jexl = node.getOriginalQuery()
      # except:
      #   pass
-      
+
       indexLookup = 1
 
       table = "shard"
@@ -1105,9 +1111,11 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       prv=""
       auths =  UserAuths.objects.get(name=request.user)
       userAuths = set()
-      for authset in auths.authorizations.all():
-          userAuths.add(authset)
+      user_auths = auths.authorizations.all()
+      if not user_auths is None:
+          for authset in user_auths:
+              userAuths.add(authset)
       s="|"
       authy= s.join(authlist)
       context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry}
-      return render(request,'search_results.html',context) 
+      return render(request,'search_results.html',context)

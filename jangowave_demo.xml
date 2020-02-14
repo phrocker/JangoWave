@@ -1,0 +1,883 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<template encoding-version="1.3">
+    <description>Demo template to get jangowave usable</description>
+    <groupId>43b4cb2c-0170-1000-b4ab-356a37140fed</groupId>
+    <name>jangowave_demo</name>
+    <snippet>
+        <controllerServices>
+            <id>589bcab3-ad5c-3e42-0000-000000000000</id>
+            <parentGroupId>17d6337f-d18b-337b-0000-000000000000</parentGroupId>
+            <bundle>
+                <artifact>nifi-accumulo-nar</artifact>
+                <group>org.apache.nifi</group>
+                <version>1.10.0</version>
+            </bundle>
+            <comments></comments>
+            <descriptors>
+                <entry>
+                    <key>Instance Name</key>
+                    <value>
+                        <name>Instance Name</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>ZooKeeper Quorum</key>
+                    <value>
+                        <name>ZooKeeper Quorum</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Accumulo User</key>
+                    <value>
+                        <name>Accumulo User</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Authentication Type</key>
+                    <value>
+                        <name>Authentication Type</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Accumulo Password</key>
+                    <value>
+                        <name>Accumulo Password</name>
+                    </value>
+                </entry>
+            </descriptors>
+            <name>AccumuloService</name>
+            <persistsState>false</persistsState>
+            <properties>
+                <entry>
+                    <key>Instance Name</key>
+                    <value>uno</value>
+                </entry>
+                <entry>
+                    <key>ZooKeeper Quorum</key>
+                    <value>localhost:2181</value>
+                </entry>
+                <entry>
+                    <key>Accumulo User</key>
+                    <value>root</value>
+                </entry>
+                <entry>
+                    <key>Authentication Type</key>
+                    <value>PASSWORD</value>
+                </entry>
+                <entry>
+                    <key>Accumulo Password</key>
+                </entry>
+            </properties>
+            <state>DISABLED</state>
+            <type>org.apache.nifi.accumulo.controllerservices.AccumuloService</type>
+        </controllerServices>
+        <controllerServices>
+            <id>646eb09b-1ffc-3e61-0000-000000000000</id>
+            <parentGroupId>17d6337f-d18b-337b-0000-000000000000</parentGroupId>
+            <bundle>
+                <artifact>nifi-record-serialization-services-nar</artifact>
+                <group>org.apache.nifi</group>
+                <version>1.11.1</version>
+            </bundle>
+            <descriptors>
+                <entry>
+                    <key>schema-access-strategy</key>
+                    <value>
+                        <name>schema-access-strategy</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-registry</key>
+                    <value>
+                        <identifiesControllerService>org.apache.nifi.schemaregistry.services.SchemaRegistry</identifiesControllerService>
+                        <name>schema-registry</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-name</key>
+                    <value>
+                        <name>schema-name</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-version</key>
+                    <value>
+                        <name>schema-version</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-branch</key>
+                    <value>
+                        <name>schema-branch</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-text</key>
+                    <value>
+                        <name>schema-text</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>schema-inference-cache</key>
+                    <value>
+                        <identifiesControllerService>org.apache.nifi.serialization.RecordSchemaCacheService</identifiesControllerService>
+                        <name>schema-inference-cache</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Date Format</key>
+                    <value>
+                        <name>Date Format</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Time Format</key>
+                    <value>
+                        <name>Time Format</name>
+                    </value>
+                </entry>
+                <entry>
+                    <key>Timestamp Format</key>
+                    <value>
+                        <name>Timestamp Format</name>
+                    </value>
+                </entry>
+            </descriptors>
+            <name>JsonTreeReader</name>
+            <persistsState>false</persistsState>
+            <properties>
+                <entry>
+                    <key>schema-access-strategy</key>
+                    <value>infer-schema</value>
+                </entry>
+                <entry>
+                    <key>schema-registry</key>
+                </entry>
+                <entry>
+                    <key>schema-name</key>
+                    <value>${schema.name}</value>
+                </entry>
+                <entry>
+                    <key>schema-version</key>
+                </entry>
+                <entry>
+                    <key>schema-branch</key>
+                </entry>
+                <entry>
+                    <key>schema-text</key>
+                    <value>${avro.schema}</value>
+                </entry>
+                <entry>
+                    <key>schema-inference-cache</key>
+                </entry>
+                <entry>
+                    <key>Date Format</key>
+                </entry>
+                <entry>
+                    <key>Time Format</key>
+                </entry>
+                <entry>
+                    <key>Timestamp Format</key>
+                </entry>
+            </properties>
+            <state>DISABLED</state>
+            <type>org.apache.nifi.json.JsonTreeReader</type>
+        </controllerServices>
+        <processGroups>
+            <id>559cc16d-1431-302f-0000-000000000000</id>
+            <parentGroupId>17d6337f-d18b-337b-0000-000000000000</parentGroupId>
+            <position>
+                <x>0.0</x>
+                <y>0.0</y>
+            </position>
+            <comments></comments>
+            <contents>
+                <connections>
+                    <id>254ceacf-c233-3385-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <backPressureDataSizeThreshold>1 GB</backPressureDataSizeThreshold>
+                    <backPressureObjectThreshold>10000</backPressureObjectThreshold>
+                    <destination>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>c8e2e27e-f9ed-3bc4-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </destination>
+                    <flowFileExpiration>0 mins</flowFileExpiration>
+                    <labelIndex>1</labelIndex>
+                    <loadBalanceCompression>DO_NOT_COMPRESS</loadBalanceCompression>
+                    <loadBalanceStatus>LOAD_BALANCE_NOT_CONFIGURED</loadBalanceStatus>
+                    <loadBalanceStrategy>DO_NOT_LOAD_BALANCE</loadBalanceStrategy>
+                    <name>linkage</name>
+                    <selectedRelationships>success</selectedRelationships>
+                    <source>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>81517268-e5ec-3d56-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </source>
+                    <zIndex>0</zIndex>
+                </connections>
+                <connections>
+                    <id>ee7b0d83-cbe6-3f93-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <backPressureDataSizeThreshold>1 GB</backPressureDataSizeThreshold>
+                    <backPressureObjectThreshold>10000</backPressureObjectThreshold>
+                    <destination>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>69f35f49-6ea1-36fd-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </destination>
+                    <flowFileExpiration>0 sec</flowFileExpiration>
+                    <labelIndex>1</labelIndex>
+                    <loadBalanceCompression>DO_NOT_COMPRESS</loadBalanceCompression>
+                    <loadBalancePartitionAttribute></loadBalancePartitionAttribute>
+                    <loadBalanceStatus>LOAD_BALANCE_NOT_CONFIGURED</loadBalanceStatus>
+                    <loadBalanceStrategy>DO_NOT_LOAD_BALANCE</loadBalanceStrategy>
+                    <name></name>
+                    <selectedRelationships>success</selectedRelationships>
+                    <source>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>c8e2e27e-f9ed-3bc4-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </source>
+                    <zIndex>0</zIndex>
+                </connections>
+                <connections>
+                    <id>fecf11a9-3cbd-38db-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <backPressureDataSizeThreshold>1 GB</backPressureDataSizeThreshold>
+                    <backPressureObjectThreshold>10000</backPressureObjectThreshold>
+                    <destination>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>81517268-e5ec-3d56-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </destination>
+                    <flowFileExpiration>0 mins</flowFileExpiration>
+                    <labelIndex>1</labelIndex>
+                    <loadBalanceCompression>DO_NOT_COMPRESS</loadBalanceCompression>
+                    <loadBalanceStatus>LOAD_BALANCE_NOT_CONFIGURED</loadBalanceStatus>
+                    <loadBalanceStrategy>DO_NOT_LOAD_BALANCE</loadBalanceStrategy>
+                    <name>linkage</name>
+                    <selectedRelationships>success</selectedRelationships>
+                    <source>
+                        <groupId>559cc16d-1431-302f-0000-000000000000</groupId>
+                        <id>ae9587fd-a54a-3493-0000-000000000000</id>
+                        <type>PROCESSOR</type>
+                    </source>
+                    <zIndex>0</zIndex>
+                </connections>
+                <processors>
+                    <id>69f35f49-6ea1-36fd-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <position>
+                        <x>1232.0</x>
+                        <y>2128.0</y>
+                    </position>
+                    <bundle>
+                        <artifact>nifi-accumulo-nar</artifact>
+                        <group>org.apache.nifi</group>
+                        <version>1.10.0</version>
+                    </bundle>
+                    <config>
+                        <bulletinLevel>WARN</bulletinLevel>
+                        <comments></comments>
+                        <concurrentlySchedulableTaskCount>1</concurrentlySchedulableTaskCount>
+                        <descriptors>
+                            <entry>
+<key>accumulo-connector-service</key>
+<value>
+    <identifiesControllerService>org.apache.nifi.accumulo.controllerservices.BaseAccumuloService</identifiesControllerService>
+    <name>accumulo-connector-service</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Table Name</key>
+<value>
+    <name>Table Name</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Create Table</key>
+<value>
+    <name>Create Table</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Threads</key>
+<value>
+    <name>Threads</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Data name</key>
+<value>
+    <name>Data name</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Enable Metadata</key>
+<value>
+    <name>Enable Metadata</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Enable Metrics</key>
+<value>
+    <name>Enable Metrics</name>
+</value>
+                            </entry>
+                            <entry>
+<key>MetricsReceivers</key>
+<value>
+    <name>MetricsReceivers</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Indexed Fields</key>
+<value>
+    <name>Indexed Fields</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Index All Fields</key>
+<value>
+    <name>Index All Fields</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Index Table Name</key>
+<value>
+    <name>Index Table Name</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Reverse Index Table Name</key>
+<value>
+    <name>Reverse Index Table Name</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Num shards</key>
+<value>
+    <name>Num shards</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Enable Graph</key>
+<value>
+    <name>Enable Graph</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Graph Table Name</key>
+<value>
+    <name>Graph Table Name</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Ingest Helper</key>
+<value>
+    <name>Ingest Helper</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Record Reader</key>
+<value>
+    <name>Record Reader</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Handler Class</key>
+<value>
+    <name>Handler Class</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Fatal Errors</key>
+<value>
+    <name>Fatal Errors</name>
+</value>
+                            </entry>
+                            <entry>
+<key>UUID Fields</key>
+<value>
+    <name>UUID Fields</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Metrics Labels</key>
+<value>
+    <name>Metrics Labels</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Metrics Fields</key>
+<value>
+    <name>Metrics Fields</name>
+</value>
+                            </entry>
+                            <entry>
+<key>record-reader</key>
+<value>
+    <identifiesControllerService>org.apache.nifi.serialization.RecordReaderFactory</identifiesControllerService>
+    <name>record-reader</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Memory Size</key>
+<value>
+    <name>Memory Size</name>
+</value>
+                            </entry>
+                            <entry>
+<key>visibility-path</key>
+<value>
+    <name>visibility-path</name>
+</value>
+                            </entry>
+                            <entry>
+<key>default-visibility</key>
+<value>
+    <name>default-visibility</name>
+</value>
+                            </entry>
+                        </descriptors>
+                        <executionNode>ALL</executionNode>
+                        <lossTolerant>false</lossTolerant>
+                        <penaltyDuration>30 sec</penaltyDuration>
+                        <properties>
+                            <entry>
+<key>accumulo-connector-service</key>
+<value>589bcab3-ad5c-3e42-0000-000000000000</value>
+                            </entry>
+                            <entry>
+<key>Table Name</key>
+<value>shard</value>
+                            </entry>
+                            <entry>
+<key>Create Table</key>
+<value>True</value>
+                            </entry>
+                            <entry>
+<key>Threads</key>
+<value>10</value>
+                            </entry>
+                            <entry>
+<key>Data name</key>
+<value>${dataname}</value>
+                            </entry>
+                            <entry>
+<key>Enable Metadata</key>
+<value>True</value>
+                            </entry>
+                            <entry>
+<key>Enable Metrics</key>
+<value>True</value>
+                            </entry>
+                            <entry>
+<key>MetricsReceivers</key>
+<value>org.apache.nifi.accumulo.data.EventCountReceiver,org.apache.nifi.accumulo.data.ByteCountReceiver,org.apache.nifi.accumulo.data.TableCountReceiver</value>
+                            </entry>
+                            <entry>
+<key>Indexed Fields</key>
+                            </entry>
+                            <entry>
+<key>Index All Fields</key>
+<value>True</value>
+                            </entry>
+                            <entry>
+<key>Index Table Name</key>
+<value>shardIndex</value>
+                            </entry>
+                            <entry>
+<key>Reverse Index Table Name</key>
+<value>shardReverseIndex</value>
+                            </entry>
+                            <entry>
+<key>Num shards</key>
+<value>5</value>
+                            </entry>
+                            <entry>
+<key>Enable Graph</key>
+<value>True</value>
+                            </entry>
+                            <entry>
+<key>Graph Table Name</key>
+<value>graph</value>
+                            </entry>
+                            <entry>
+<key>Ingest Helper</key>
+<value>org.apache.nifi.accumulo.data.RecordIngestHelper</value>
+                            </entry>
+                            <entry>
+<key>Record Reader</key>
+<value>org.apache.nifi.accumulo.processors.DatawaveRecordReader</value>
+                            </entry>
+                            <entry>
+<key>Handler Class</key>
+<value>org.apache.nifi.accumulo.data.ContentRecordHandler</value>
+                            </entry>
+                            <entry>
+<key>Fatal Errors</key>
+<value>MISSING_DATA_ERROR,INVALID_DATA_ERROR</value>
+                            </entry>
+                            <entry>
+<key>UUID Fields</key>
+<value>UUID,PARENT_UUID</value>
+                            </entry>
+                            <entry>
+<key>Metrics Labels</key>
+<value>table=shard,table=shardIndex,dataType=*,handler=org.apache.nifi.accumulo.data.RecordDataTypeHelper</value>
+                            </entry>
+                            <entry>
+<key>Metrics Fields</key>
+<value>table,fileExtension</value>
+                            </entry>
+                            <entry>
+<key>record-reader</key>
+<value>646eb09b-1ffc-3e61-0000-000000000000</value>
+                            </entry>
+                            <entry>
+<key>Memory Size</key>
+<value>10 MB</value>
+                            </entry>
+                            <entry>
+<key>visibility-path</key>
+                            </entry>
+                            <entry>
+<key>default-visibility</key>
+                            </entry>
+                        </properties>
+                        <runDurationMillis>0</runDurationMillis>
+                        <schedulingPeriod>0 sec</schedulingPeriod>
+                        <schedulingStrategy>TIMER_DRIVEN</schedulingStrategy>
+                        <yieldDuration>1 sec</yieldDuration>
+                    </config>
+                    <executionNodeRestricted>false</executionNodeRestricted>
+                    <name>RecordIngest</name>
+                    <relationships>
+                        <autoTerminate>true</autoTerminate>
+                        <name>failure</name>
+                    </relationships>
+                    <relationships>
+                        <autoTerminate>true</autoTerminate>
+                        <name>success</name>
+                    </relationships>
+                    <state>STOPPED</state>
+                    <style/>
+                    <type>org.apache.nifi.accumulo.processors.RecordIngest</type>
+                </processors>
+                <processors>
+                    <id>81517268-e5ec-3d56-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <position>
+                        <x>669.0</x>
+                        <y>1897.0</y>
+                    </position>
+                    <bundle>
+                        <artifact>nifi-update-attribute-nar</artifact>
+                        <group>org.apache.nifi</group>
+                        <version>1.11.1</version>
+                    </bundle>
+                    <config>
+                        <bulletinLevel>WARN</bulletinLevel>
+                        <comments></comments>
+                        <concurrentlySchedulableTaskCount>1</concurrentlySchedulableTaskCount>
+                        <descriptors>
+                            <entry>
+<key>Delete Attributes Expression</key>
+<value>
+    <name>Delete Attributes Expression</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Store State</key>
+<value>
+    <name>Store State</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Stateful Variables Initial Value</key>
+<value>
+    <name>Stateful Variables Initial Value</name>
+</value>
+                            </entry>
+                            <entry>
+<key>canonical-value-lookup-cache-size</key>
+<value>
+    <name>canonical-value-lookup-cache-size</name>
+</value>
+                            </entry>
+                            <entry>
+<key>TRACKINGUUID</key>
+<value>
+    <name>TRACKINGUUID</name>
+</value>
+                            </entry>
+                        </descriptors>
+                        <executionNode>ALL</executionNode>
+                        <lossTolerant>false</lossTolerant>
+                        <penaltyDuration>30 sec</penaltyDuration>
+                        <properties>
+                            <entry>
+<key>Delete Attributes Expression</key>
+                            </entry>
+                            <entry>
+<key>Store State</key>
+<value>Do not store state</value>
+                            </entry>
+                            <entry>
+<key>Stateful Variables Initial Value</key>
+                            </entry>
+                            <entry>
+<key>canonical-value-lookup-cache-size</key>
+<value>100</value>
+                            </entry>
+                            <entry>
+<key>TRACKINGUUID</key>
+<value>${filename:substringBefore('_')}</value>
+                            </entry>
+                        </properties>
+                        <runDurationMillis>0</runDurationMillis>
+                        <schedulingPeriod>10 sec</schedulingPeriod>
+                        <schedulingStrategy>TIMER_DRIVEN</schedulingStrategy>
+                        <yieldDuration>1 sec</yieldDuration>
+                    </config>
+                    <executionNodeRestricted>false</executionNodeRestricted>
+                    <name>ExtractFileName</name>
+                    <relationships>
+                        <autoTerminate>false</autoTerminate>
+                        <name>success</name>
+                    </relationships>
+                    <state>STOPPED</state>
+                    <style/>
+                    <type>org.apache.nifi.processors.attributes.UpdateAttribute</type>
+                </processors>
+                <processors>
+                    <id>ae9587fd-a54a-3493-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <position>
+                        <x>869.0</x>
+                        <y>1697.0</y>
+                    </position>
+                    <bundle>
+                        <artifact>nifi-standard-nar</artifact>
+                        <group>org.apache.nifi</group>
+                        <version>1.11.1</version>
+                    </bundle>
+                    <config>
+                        <bulletinLevel>WARN</bulletinLevel>
+                        <comments></comments>
+                        <concurrentlySchedulableTaskCount>1</concurrentlySchedulableTaskCount>
+                        <descriptors>
+                            <entry>
+<key>Base Path</key>
+<value>
+    <name>Base Path</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Listening Port</key>
+<value>
+    <name>Listening Port</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Max Data to Receive per Second</key>
+<value>
+    <name>Max Data to Receive per Second</name>
+</value>
+                            </entry>
+                            <entry>
+<key>SSL Context Service</key>
+<value>
+    <identifiesControllerService>org.apache.nifi.ssl.RestrictedSSLContextService</identifiesControllerService>
+    <name>SSL Context Service</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Authorized DN Pattern</key>
+<value>
+    <name>Authorized DN Pattern</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Max Unconfirmed Flowfile Time</key>
+<value>
+    <name>Max Unconfirmed Flowfile Time</name>
+</value>
+                            </entry>
+                            <entry>
+<key>HTTP Headers to receive as Attributes (Regex)</key>
+<value>
+    <name>HTTP Headers to receive as Attributes (Regex)</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Return Code</key>
+<value>
+    <name>Return Code</name>
+</value>
+                            </entry>
+                            <entry>
+<key>multipart-request-max-size</key>
+<value>
+    <name>multipart-request-max-size</name>
+</value>
+                            </entry>
+                            <entry>
+<key>multipart-read-buffer-size</key>
+<value>
+    <name>multipart-read-buffer-size</name>
+</value>
+                            </entry>
+                        </descriptors>
+                        <executionNode>ALL</executionNode>
+                        <lossTolerant>false</lossTolerant>
+                        <penaltyDuration>30 sec</penaltyDuration>
+                        <properties>
+                            <entry>
+<key>Base Path</key>
+<value>contentListener</value>
+                            </entry>
+                            <entry>
+<key>Listening Port</key>
+<value>8181</value>
+                            </entry>
+                            <entry>
+<key>Max Data to Receive per Second</key>
+                            </entry>
+                            <entry>
+<key>SSL Context Service</key>
+                            </entry>
+                            <entry>
+<key>Authorized DN Pattern</key>
+<value>.*</value>
+                            </entry>
+                            <entry>
+<key>Max Unconfirmed Flowfile Time</key>
+<value>60 secs</value>
+                            </entry>
+                            <entry>
+<key>HTTP Headers to receive as Attributes (Regex)</key>
+                            </entry>
+                            <entry>
+<key>Return Code</key>
+<value>200</value>
+                            </entry>
+                            <entry>
+<key>multipart-request-max-size</key>
+<value>1 MB</value>
+                            </entry>
+                            <entry>
+<key>multipart-read-buffer-size</key>
+<value>512 KB</value>
+                            </entry>
+                        </properties>
+                        <runDurationMillis>0</runDurationMillis>
+                        <schedulingPeriod>4 sec</schedulingPeriod>
+                        <schedulingStrategy>TIMER_DRIVEN</schedulingStrategy>
+                        <yieldDuration>1 sec</yieldDuration>
+                    </config>
+                    <executionNodeRestricted>false</executionNodeRestricted>
+                    <name>ListenHTTP</name>
+                    <relationships>
+                        <autoTerminate>false</autoTerminate>
+                        <name>success</name>
+                    </relationships>
+                    <state>STOPPED</state>
+                    <style/>
+                    <type>org.apache.nifi.processors.standard.ListenHTTP</type>
+                </processors>
+                <processors>
+                    <id>c8e2e27e-f9ed-3bc4-0000-000000000000</id>
+                    <parentGroupId>559cc16d-1431-302f-0000-000000000000</parentGroupId>
+                    <position>
+                        <x>669.0</x>
+                        <y>2097.0</y>
+                    </position>
+                    <bundle>
+                        <artifact>nifi-update-attribute-nar</artifact>
+                        <group>org.apache.nifi</group>
+                        <version>1.11.1</version>
+                    </bundle>
+                    <config>
+                        <bulletinLevel>WARN</bulletinLevel>
+                        <comments></comments>
+                        <concurrentlySchedulableTaskCount>1</concurrentlySchedulableTaskCount>
+                        <descriptors>
+                            <entry>
+<key>Delete Attributes Expression</key>
+<value>
+    <name>Delete Attributes Expression</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Store State</key>
+<value>
+    <name>Store State</name>
+</value>
+                            </entry>
+                            <entry>
+<key>Stateful Variables Initial Value</key>
+<value>
+    <name>Stateful Variables Initial Value</name>
+</value>
+                            </entry>
+                            <entry>
+<key>canonical-value-lookup-cache-size</key>
+<value>
+    <name>canonical-value-lookup-cache-size</name>
+</value>
+                            </entry>
+                            <entry>
+<key>dataname</key>
+<value>
+    <name>dataname</name>
+</value>
+                            </entry>
+                        </descriptors>
+                        <executionNode>ALL</executionNode>
+                        <lossTolerant>false</lossTolerant>
+                        <penaltyDuration>30 sec</penaltyDuration>
+                        <properties>
+                            <entry>
+<key>Delete Attributes Expression</key>
+                            </entry>
+                            <entry>
+<key>Store State</key>
+<value>Do not store state</value>
+                            </entry>
+                            <entry>
+<key>Stateful Variables Initial Value</key>
+                            </entry>
+                            <entry>
+<key>canonical-value-lookup-cache-size</key>
+<value>100</value>
+                            </entry>
+                            <entry>
+<key>dataname</key>
+<value>jangowave_demo</value>
+                            </entry>
+                        </properties>
+                        <runDurationMillis>0</runDurationMillis>
+                        <schedulingPeriod>10 sec</schedulingPeriod>
+                        <schedulingStrategy>TIMER_DRIVEN</schedulingStrategy>
+                        <yieldDuration>1 sec</yieldDuration>
+                    </config>
+                    <executionNodeRestricted>false</executionNodeRestricted>
+                    <name>AddDataName</name>
+                    <relationships>
+                        <autoTerminate>false</autoTerminate>
+                        <name>success</name>
+                    </relationships>
+                    <state>STOPPED</state>
+                    <style/>
+                    <type>org.apache.nifi.processors.attributes.UpdateAttribute</type>
+                </processors>
+            </contents>
+            <name>jangowave_demo</name>
+            <variables/>
+        </processGroups>
+    </snippet>
+    <timestamp>02/14/2020 14:04:06 UTC</timestamp>
+</template>
