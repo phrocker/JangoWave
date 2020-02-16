@@ -21,7 +21,7 @@ Apache Accumulo Query application built in python.
 ### Building Demo
 
 You can quickly and easily build a demo using the scripts provided.  If you wish to set up the demo
-on a single node you can use fluo-uno [https://github.com/apache/fluo-uno] 
+on a single node you can use [fluo-uno](https://github.com/apache/fluo-uno)
 
 Run ./build.sh from root or the following commands:
 
