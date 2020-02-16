@@ -11,4 +11,5 @@ django-slick-admin
 django-stronghold
 luqum
 nipyapi
+django-extensions
 django_redis

@@ -6,8 +6,8 @@ services:
     ports:
       - "8080:8080" # Unsecured HTTP Web Port
       - "8181:8181" # Unsecured HTTP Web Port
-  db:
-    image: postgres
+      - "2181" # zk
+      - "9997-9999"
   web:
     build:
       context: "."
@@ -21,7 +21,6 @@ services:
       - "2181"
       - "8181"
     depends_on:
-      - db
       - nifi
   celery:
     build: .
@@ -29,7 +28,6 @@ services:
     volumes:
       - jango:/jangowave1
     depends_on:
-      - db
       - redis
   redis:
     restart: always

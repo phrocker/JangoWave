@@ -19,7 +19,7 @@ from django.contrib.auth.decorators import user_passes_test, login_required
 from django.template import RequestContext
 from django.core.cache import caches
 from django.shortcuts import render
-#from django import http
+from django import http
 from django.http import HttpResponseRedirect,JsonResponse
 from django.shortcuts import render_to_response
 from ctypes import cdll
@@ -601,11 +601,13 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      #auths =  UserAuths.objects.get(name=request.user)
-      auths =  UserAuths.objects.get(name=request.user)
       userAuths = set()
-      for authset in auths.authorizations.all():
-          userAuths.add(authset)
+      try:
+        auths =  UserAuths.objects.get(name=request.user)
+        for authset in auths.authorizations.all():
+            userAuths.add(authset)
+      except:
+        pass
       context = { 'admin': request.user.is_superuser, 'authenticated':True, 'userAuths': userAuths }
       return render(request,self.template_name,context)
 
@@ -844,7 +846,6 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
      ## scan for the original document
       writer.addMutation(deletes)
       writer.close()
-      ## add the deletes. Can leave the index hanging
       for auth in authstring.split("|"):
         url = url + "&auths=" + auth
       return HttpResponseRedirect(url)
@@ -984,9 +985,9 @@ class FileUploadView(StrongholdPublicMixin,TemplateView):
                     ## upload the file to another location  and then
                     ## change the status
                     files = FileUpload.objects.filter(status="NEW")
-                    if not Files is None:
+                    if not files is None:
                         for file in files:
-                            upl_files = {'file': open(file.path,'rb')}
+                            upl_files = {'file': open(file.document.path,'rb')}
                             requests.post(config.post_location,files=upl_files)
                             file.status="UPLOADED"
                             file.save()
@@ -1109,12 +1110,16 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
         counts=counts+1
       nxt=""
       prv=""
-      auths =  UserAuths.objects.get(name=request.user)
+
       userAuths = set()
-      user_auths = auths.authorizations.all()
-      if not user_auths is None:
+      try:
+        auths =  UserAuths.objects.get(name=request.user)
+        user_auths = auths.authorizations.all()
+        if not user_auths is None:
           for authset in user_auths:
-              userAuths.add(authset)
+            userAuths.add(authset)
+      except:
+        pass
       s="|"
       authy= s.join(authlist)
       context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry}

@@ -498,7 +498,7 @@
                             </entry>
                             <entry>
 <key>Enable Graph</key>
-<value>True</value>
+<value>False</value>
                             </entry>
                             <entry>
 <key>Graph Table Name</key>

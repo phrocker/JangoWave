@@ -20,7 +20,7 @@ class UserAuths(models.Model):
 
 class IngestConfiguration(models.Model):
     ## post location. If not defined then
-    name = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
     post_location = models.CharField(max_length=2550,default="")
     use_provenance = models.BooleanField()
     provenanceTable = models.CharField(max_length=255,default="provenance")
