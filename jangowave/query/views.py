@@ -114,14 +114,17 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
       indexScanner.fetchColumn(rng.getField().upper(),"")
     indexSet = indexScanner.getResultSet()
 
-    for indexKeyValue in indexSet:
-       value = indexKeyValue.getValue()
-       protobuf = Uid_pb2.List()
-       protobuf.ParseFromString(value.get().encode())
-       for uidvalue in protobuf.UID:
+    try:
+      for indexKeyValue in indexSet:
+        value = indexKeyValue.getValue()
+        protobuf = Uid_pb2.List()
+        protobuf.ParseFromString(value.get().encode())
+        for uidvalue in protobuf.UID:
             shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
             datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
             output.put( Range(datatype,shard,uidvalue))
+    except:
+      pass
     indexScanner.close()
 
 
@@ -472,7 +475,10 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
             combinertxt = file.read()
             combiner=pysharkbite.PythonIterator("PythonCombiner",combinertxt,100)
             scanner.addIterator(combiner)
-          count = count + scanDoc(scanner,outputQueue)
+          try:
+            count = count + scanDoc(scanner,outputQueue)
+          except:
+            pass
         else:
           time.sleep(0.5)
 
@@ -989,8 +995,11 @@ class FileUploadView(StrongholdPublicMixin,TemplateView):
                         for file in files:
                             upl_files = {'file': open(file.document.path,'rb')}
                             requests.post(config.post_location,files=upl_files)
+                            print("Posting to " + config.post_location)
                             file.status="UPLOADED"
                             file.save()
+                else:
+                  print("Could not find a suitable post location")
             return HttpResponseRedirect('/files/status')
 
         context = {'admin': request.user.is_superuser, 'authenticated':True, 'form' : form}
@@ -1016,7 +1025,7 @@ class FileStatusView(StrongholdPublicMixin,TemplateView):
     def get(self, request, *args, **kwargs):
       form = DocumentForm()
       objs = FileUpload.objects.all()
-      #objs = FileUpload.objects.all().order_by("status")
+      
       for obj in objs:
         if len(obj.originalfile)==0:
           ind = obj.document.name.split("_")

@@ -109,18 +109,22 @@ def pouplateEventCountMetadata():
 
         counts=0
         mapping={}
-        for indexKeyValue in indexSet:
-         value = indexKeyValue.getValue()
-         key = indexKeyValue.getKey()
-         if key.getColumnFamily() == "EVENT_COUNT":
-           dt = key.getRow().split("_")[0]
-           if dt in mapping:
-              mapping[dt] += int(value.get())
-           else:
-             mapping[dt] = int(value.get())
-        arr = [None] * len(mapping.keys())
-        for field in mapping:
-          caches['eventcount'].set(field,str(mapping[field]),3600*48)
+        try:
+          for indexKeyValue in indexSet:
+            value = indexKeyValue.getValue()
+            key = indexKeyValue.getKey()
+            if key.getColumnFamily() == "EVENT_COUNT":
+              dt = key.getRow().split("_")[0]
+              if dt in mapping:
+                  mapping[dt] += int(value.get())
+              else:
+                mapping[dt] = int(value.get())
+          arr = [None] * len(mapping.keys())
+          for field in mapping:
+            caches['eventcount'].set(field,str(mapping[field]),3600*48)
+        except:
+          pass
+        
 
 @shared_task
 def initial_upload():
@@ -137,6 +141,7 @@ def get_uploads():
         haveNew=True
   if not haveNew:
     caches['eventcount'].set("ingestcomplete",100)
+    return
   import pysharkbite
   conf = pysharkbite.Configuration()
   conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
@@ -158,16 +163,19 @@ def get_uploads():
   indexSet = indexScanner.getResultSet()
   count=0
   usercount=0
-  for indexKeyValue in indexSet:
-    if indexKeyValue.getKey().getColumnFamily() == "CONTENTURI":
-      count=count+1
-    else:
-      usercount=usercount+1
-  if count > 0:
-    caches['eventcount'].set("ingestcount",count,3600*48)
-  if usercount > 0:
-    caches['eventcount'].set("useruploads",usercount,3600*48)
-  indexScanner.close()
+  try:
+    for indexKeyValue in indexSet:
+      if indexKeyValue.getKey().getColumnFamily() == "CONTENTURI":
+        count=count+1
+      else:
+        usercount=usercount+1
+    if count > 0:
+      caches['eventcount'].set("ingestcount",count,3600*48)
+    if usercount > 0:
+      caches['eventcount'].set("useruploads",usercount,3600*48)
+    indexScanner.close()
+  except:
+    pass ## user does not have PROV
   
 @periodic_task(run_every=timedelta(seconds=10))
 def check():

@@ -10,7 +10,7 @@ def run(*args):
     democonfig = IngestConfiguration()
     democonfig.name="democonfig"
     democonfig.use_provenance=False
-    democonfig.post_location="http://nifi:8080/contentListener"
+    democonfig.post_location="http://nifi:8181/contentListener"
     democonfig.save()
 
     instance = "uno"

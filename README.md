@@ -18,6 +18,21 @@ Apache Accumulo Query application built in python.
     django-extensions
     pyjnius
 
+Jangowave works with a variety of iterators. This project requires python iterators, which 
+can be found in [sharkbite](https://github.com/phrocker/sharkbite/tree/master/native-iterators-jni)
+
+The demo, which can be created from two scripts, sets up the containers with a defined flow. Note
+that this is a base flow. It is expected that you can either deploy the NiFi container on your own
+or augment the flow defined in the jangowave_demo.xml template. 
+
+## General points
+
+While this app has been tested with some additional query iterators on production environments, the
+repo doesn't contain these references yet. That code will be provided soon ( upon first release ).
+
+There are some assumptions made currently. Namely that searches are synchronous. This will be changed very soon
+to facilitate asynchronous searches that use caching to speed up time to first result.
+
 ### Building Demo
 
 You can quickly and easily build a demo using the scripts provided.  If you wish to set up the demo
