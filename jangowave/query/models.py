@@ -18,6 +18,13 @@ class UserAuths(models.Model):
     name = models.ForeignKey(User, on_delete=models.CASCADE)
     authorizations = models.ManyToManyField(Auth)
 
+class IngestConfiguration(models.Model):
+    ## post location. If not defined then
+    name = models.CharField(max_length=255)
+    post_location = models.CharField(max_length=2550,default="")
+    use_provenance = models.BooleanField()
+    provenanceTable = models.CharField(max_length=255,default="provenance")
+
 import os
 def update_filename(instance, filename):
     ext = filename
@@ -33,19 +40,19 @@ class FileUpload(models.Model):
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
     status = models.CharField(max_length=20, default="NEW")
     document = models.FileField(null=True, blank=True,upload_to=update_filename)
-    
+
     def __str__(self):
-      return self.uuid + "." +  filename  
+      return self.uuid + "." +  filename
 
 class AccumuloCluster(models.Model):
      instance = models.CharField(max_length=255)
      zookeeper = models.CharField(max_length=1024)
      user = models.CharField(max_length=255)
      password = models.CharField(max_length=255)
-  
+
      def save(self, *args, **kwargs):
         if not self.pk and AccumuloCluster.objects.exists():
-        # if you'll not check for self.pk 
+        # if you'll not check for self.pk
         # then error will also raised in update of exists model
             raise ValidationError('There is can be only one AccumuloCluster instance')
         return super(AccumuloCluster, self).save(*args, **kwargs)

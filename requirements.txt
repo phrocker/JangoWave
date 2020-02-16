@@ -5,9 +5,11 @@ google-cloud
 django==2.2.10
 pyparsing
 sortedcontainers
+#pyjnius
 django-adminlte3
 django-slick-admin
 django-stronghold
 luqum
 nipyapi
+django-extensions
 django_redis

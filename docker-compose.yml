@@ -2,13 +2,16 @@ version: '3'
 
 services:
   nifi:
-    image: apache/nifi:latest
+    image: phrocker/nifi-jangowave:latest
     ports:
       - "8080:8080" # Unsecured HTTP Web Port
-  db:
-    image: postgres
+      - "8181:8181" # Unsecured HTTP Web Port
+      - "2181" # zk
+      - "9997-9999"
   web:
-    build: .
+    build:
+      context: "."
+      dockerfile: "Dockerfile.jangowave"
     command: python3.7 manage.py runserver 0.0.0.0:8000
     volumes:
       - jango:/jangowave1
@@ -18,7 +21,6 @@ services:
       - "2181"
       - "8181"
     depends_on:
-      - db
       - nifi
   celery:
     build: .
@@ -26,7 +28,6 @@ services:
     volumes:
       - jango:/jangowave1
     depends_on:
-      - db
       - redis
   redis:
     restart: always

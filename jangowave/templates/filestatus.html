@@ -6,7 +6,7 @@
 {% block content %}
 
 <div align="center">
-<h1>Ingest Metadata</h1>
+<h1>Ingest Status</h1>
 </div>
 <!-- <i class="fas fa-search"></i>&nbsp;<input type="text" id="myInput" onkeyup="fieldMetadataSearch()" placeholder="Search field metadata...">
 -->
@@ -26,8 +26,9 @@
                 <tbody>
 {% for field in uploads %}
         <tr>
-                  <td><a href="/metadata?q={{key2}}&date={{key}}">{{field.originalfile}}</a></td>
-                  <td><a href="/metadata?q={{key2}}">{{field.uuid}}</a></td>
+<!-- search/?q=b0767327-a5a5-492b-a11c-96be2f696cef_test.json&auths=PROV -->
+                  <td><a href="/search/?q={{field.uuid}}_{{field.originalfile}}&auths=PROV">{{field.originalfile}}</a></td>
+                  <td><a href="/search/?q={{field.uuid}}_{{field.originalfile}}&auths=PROV">{{field.uuid}}</a></td>
                   <td>{{field.status}}</td>
                 </tr>
 {% endfor %}

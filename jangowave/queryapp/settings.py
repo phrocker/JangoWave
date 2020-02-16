@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'query.apps.QueryConfig',
     'stronghold',
+    'django_extensions',
 ]
 
 MIDDLEWARE = [

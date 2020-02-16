@@ -40,8 +40,35 @@ query took {{ time }} s
   {% endif %}
 {% endif %}
 </div>
+<table style="width:100%">
+<tr>
+<td style="text-align:right">
+<a id="mylink" href="#" onclick="jsontable();">json</a>|<a  id="mylink" href="#" onclick="tabular();"> tabular<a>
+</td>
+</tr>
+</table>
+
+<div id="tablediv" style="display:none">
+<table data-sort-name="date" data-sort-order="desc"  class=" table-hover table table-bordered" style="width:99%">
+<thead>
+<tr>
+{% for headerentry in header %}
+     <th data-sortable="true" data-field="date">{{headerentry}}</th>
+{% endfor %}
+</tr>
+</thead>
 {% for result in results %}
-<table style="width:100%" >
+<tr> 
+   {% for headerentry in header %}
+          <td><a href="/search/?q={{query}}%20AND%20{{headerentry}}:{{result|get_item:headerentry}}&auths={{authstring}}">{{result|get_item:headerentry}}</a></td>
+    {% endfor %}
+</tr>
+{% endfor %}
+</table>
+</div>
+<div id="jsondiv">
+{% for result in results %}
+<table style="width:99%" >
 <tr>
 <td>
 <pre id="json">
@@ -51,6 +78,7 @@ query took {{ time }} s
 </tr>
 </table>
 {% endfor %}
+</div>
 <div align="center">
 {% if prv %}
   <a href="{{prv}}"><< </a>

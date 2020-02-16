@@ -6,7 +6,7 @@
 {% block content %}
 
 <div align="center">
-<h1>Ingest Metadata</h1>
+<h1>Field Counts</h1>
 </div>
 <i class="fas fa-search"></i>&nbsp;<input type="text" id="myInput" onkeyup="fieldMetadataSearch()" placeholder="Search field metadata...">
 <div class="table-responsive-sm">
@@ -22,8 +22,8 @@
 {% for key, value in metadata.items %}
       {% for key2,value2 in value.items %}
         <tr>
-                  <td><a href="/metadata?q={{key2}}&date={{key}}">{{key}}</a></td>
-                  <td><a href="/metadata?q={{key2}}">{{key2}}</a></td>
+                  <td><!--<a href="/metadata?q={{key2}}&date={{key}}"> -->{{key}}</td>
+                  <td><!--<a href="/metadata?q={{key2}}"> -->{{key2}}</td>
                   <td>{{value2}}</td>
                 </tr>
       {% endfor %}
