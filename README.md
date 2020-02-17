@@ -56,3 +56,9 @@ that receives data from your Jangowave app. Data will be ingested and queryable 
 It is important that the zookeeper list be an accessible IP. For example, if you are hosting on
 fluo-uno you may want to set your fluo uno hostname to 0.0.0.0 or an accessible adapter with an IP
 that will be accessible by the containers. 
+
+### Where are my graphs?
+
+If you are running the demo app the graphs, up on ingest, take some time to populate. Background tasks
+are launched in celery that auto-update the backing cache. As a result it may take a bit of time after
+ingest to begin seeing metadata and metrics populated. Data that is ingested will be immediately queryable.

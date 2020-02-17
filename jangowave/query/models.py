@@ -49,6 +49,9 @@ class AccumuloCluster(models.Model):
      zookeeper = models.CharField(max_length=1024)
      user = models.CharField(max_length=255)
      password = models.CharField(max_length=255)
+     dataTable = models.CharField(max_length=255,default="shard")
+     indexTable = models.CharField(max_length=255,default="shardIndex")
+     reverseIndexTable = models.CharField(max_length=255,default="shardReverseIndex")
 
      def save(self, *args, **kwargs):
         if not self.pk and AccumuloCluster.objects.exists():

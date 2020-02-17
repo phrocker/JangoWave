@@ -9,7 +9,7 @@ def run(*args):
     auth.save()
     democonfig = IngestConfiguration()
     democonfig.name="democonfig"
-    democonfig.use_provenance=False
+    democonfig.use_provenance=True
     democonfig.post_location="http://nifi:8181/contentListener"
     democonfig.save()
 
@@ -49,14 +49,44 @@ def run(*args):
     acc.password = acc_pass
     acc.save()
     import pysharkbite
-    conf = pysharkbite.Configuration()
-    zoo_keeper = pysharkbite.ZookeeperInstance(instance,zookeepers, 1000, conf)
-    user = pysharkbite.AuthInfo(acc_user,acc_pass, zoo_keeper.getInstanceId())
-    connector = pysharkbite.AccumuloConnector(user, zoo_keeper)
-    security_ops = connector.securityOps()
-    auths = pysharkbite.Authorizations()
-    auths.addAuthorization("MTRCS")
-    security_ops.grantAuthorizations(auths,acc_user)
+    while True:
+        try:
+            conf = pysharkbite.Configuration()
+            conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+            zoo_keeper = pysharkbite.ZookeeperInstance(instance,zookeepers, 1000, conf)
+            user = pysharkbite.AuthInfo(acc_user,acc_pass, zoo_keeper.getInstanceId())
+            connector = pysharkbite.AccumuloConnector(user, zoo_keeper)
+            security_ops = connector.securityOps()
+            auths = pysharkbite.Authorizations()
+            auths.addAuthorization("MTRCS")
+            auths.addAuthorization("PROV")
+            security_ops.grantAuthorizations(auths,acc_user)
+            table_ops = connector.tableOps("shard")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            table_ops = connector.tableOps("shardIndex")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            table_ops = connector.tableOps("shardReverse")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            table_ops = connector.tableOps("provenance")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            table_ops = connector.tableOps("provenanceIndex")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            table_ops = connector.tableOps("provenanceReverseIndex")
+            if not table_ops.exists(False):
+                table_ops.create(False)
+            break
+        except RuntimeError as e:
+            exc = str(e)
+            if exc.find("Instance Id does not exist") > 0:
+                pass
+            else:
+                break
+
 
      
 

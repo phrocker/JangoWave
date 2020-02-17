@@ -411,9 +411,12 @@ def scanDoc(scanner, outputQueue):
     count = 0
     for keyvalue in resultset:
         key = keyvalue.getKey()
+        print("Getting " + key.getRow()  + " " + key.getColumnFamily().split("\u0000")[1])
         value = keyvalue.getValue()
         if len(value.get()) == 0:
+          print("Skipping " + key.getRow()  + " " + key.getColumnFamily().split("\u0000")[1])
           continue
+        print("got " + key.getRow() + " " + value.get())
         jsonpayload = json.loads(value.get())
         outputQueue.put( jsonpayload )
 
@@ -446,6 +449,7 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
           startKey.setColumnFamily(docid)
           endKey.setRow(docInfo.getShard())
           endKey.setColumnFamily(docid + "\xff")
+          print("Searching for " + docInfo.getShard())
           rng = pysharkbite.Range(startKey,True,endKey,True)
 
           scanner.addRange(rng)
@@ -463,7 +467,7 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
               endKey.setRow(docInfo.getShard())
               endKey.setColumnFamily(docid + "\xff")
               rng = pysharkbite.Range(startKey,True,endKey,True)
-
+              print("Searching for " + docInfo.getShard())
               scanner.addRange(rng)
               rangecount=rangecount+1
 
@@ -544,7 +548,7 @@ def lookup(indexLookupInformation : LookupInformation, docLookupInformation : Lo
 
     executor = ThreadPoolExecutor(max_workers=5)
     producer = executor.submit(produceShardRanges,producerrunning,indexLookupInformation,asyncQueue,iterator)
-    for i in range(2):
+    for i in range(1):
       future = executor.submit(getDocuments,isrunning,i,docLookupInformation,asyncQueue,intermediateQueue)
       workers.append(future)
 
@@ -777,7 +781,6 @@ class MetadataChartView(JSONResponseMixin,TemplateView):
         fields[counts]=field
         loccount=0
         for cnt in mapping[field]:
-        #  arr[counts][loccount] = cnt
           loccount=loccount+1
         counts=counts+1
       returnval = [1]
@@ -835,7 +838,7 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
         auths.addAuthorization(authstring)
       user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
-      tableOps = connector.tableOps("shard")
+      tableOps = connector.tableOps(AccumuloCluster.objects.first().dataTable)
       scanner = tableOps.createScanner(auths,1)
       startKey = pysharkbite.Key(row=shard)
       endKey = pysharkbite.Key(row=shard)
@@ -900,9 +903,8 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       #for auth in
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
-
-      table = "shard"
-      index_table= "shardIndex"
+      table = AccumuloCluster.objects.first().dataTable
+      index_table= AccumuloCluster.objects.first().indexTable
       table_operations = connector.tableOps(table)
       index_table_ops = connector.tableOps(index_table)
       writer = table_operations.createWriter(auths, 10)
@@ -947,7 +949,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
 
-      table = "shard"
+      table = AccumuloCluster.objects.first().dataTable
       authstring = request.GET.get('auths')
       if not authstring is None and len(authstring) > 0 and authstring=="PROV":
         table="provenance"
@@ -996,7 +998,8 @@ class FileUploadView(StrongholdPublicMixin,TemplateView):
                             upl_files = {'file': open(file.document.path,'rb')}
                             requests.post(config.post_location,files=upl_files)
                             print("Posting to " + config.post_location)
-                            file.status="UPLOADED"
+                            if not config.use_provenance:
+                              file.status="UPLOADED"
                             file.save()
                 else:
                   print("Could not find a suitable post location")
@@ -1074,8 +1077,8 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
 
       indexLookup = 1
 
-      table = "shard"
-      index_table = "shardIndex"
+      table = AccumuloCluster.objects.first().dataTable
+      index_table = AccumuloCluster.objects.first().indexTable
       isProv=False
       authlist=list()
       auths = pysharkbite.Authorizations()

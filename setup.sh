@@ -16,9 +16,17 @@ do
 	$cmd 2>/dev/null
 	status=$?
 	if [ $status -ne 0 ]; then
-		sleep 5
+		echo "NiFi not available, sleeping 10 seconds..."
+		cmd="python3.7 delete_template.py --host http://localhost:8080/ --zookeepers ${ZK_LIST}"
+		$cmd 2>/dev/null
+		sleep 10
 	fi
 done
+
+## deploy and start the reporting task
+
+python3.7 deploy_reportingtask.py  --host http://localhost:8080/ --zookeepers ${ZK_LIST}
+
 echo "Apache NiFi setup complete"
 
 echo "Setting up Jangowave App. You will be prompted for the initial admin username and password"

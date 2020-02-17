@@ -188,8 +188,10 @@ def check():
         conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
         model = apps.get_model(app_label='query', model_name='AccumuloCluster')
         accumulo_cluster = model.objects.first()
+        print("Checking " + str(obj.uuid))
         if accumulo_cluster is None:
           return;
+        print("Checking " + str(obj.uuid))
         zk = pysharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
         user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
         connector = pysharkbite.AccumuloConnector(user, zk)
