@@ -48,6 +48,16 @@ def run(*args):
     acc.user = acc_user
     acc.password = acc_pass
     acc.save()
+    import pysharkbite
+    conf = pysharkbite.Configuration()
+    zoo_keeper = pysharkbite.ZookeeperInstance(instance,zookeepers, 1000, conf)
+    user = pysharkbite.AuthInfo(acc_user,acc_pass, zoo_keeper.getInstanceId())
+    connector = pysharkbite.AccumuloConnector(user, zoo_keeper)
+    security_ops = connector.securityOps()
+    auths = pysharkbite.Authorizations()
+    auths.addAuthorization("MTRCS")
+    security_ops.grantAuthorizations(auths,acc_user)
+
      
 
     
