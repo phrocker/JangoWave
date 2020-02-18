@@ -62,3 +62,8 @@ that will be accessible by the containers.
 If you are running the demo app the graphs, up on ingest, take some time to populate. Background tasks
 are launched in celery that auto-update the backing cache. As a result it may take a bit of time after
 ingest to begin seeing metadata and metrics populated. Data that is ingested will be immediately queryable.
+
+
+## The UI
+
+![Searching](https://user-images.githubusercontent.com/1781585/74694296-8a6e4880-51e7-11ea-858b-f6b26288ad47.png)

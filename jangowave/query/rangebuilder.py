@@ -77,12 +77,18 @@ class Range:
         return self._docid
 
     def __eq__(self, other):
+        if other is None:
+         return False
         return self._shard == other._shard and self._docid == other._docid
 
     def __gt__(self, other):
+       if other is None:
+         return True
        return self._shard > other._shard and self._docid > other._docid
 
     def __lt__(self, other):
+       if other is None:
+         return False
        return self._shard < other._shard and self._docid < other._docid
 
 class RangeLookup:
@@ -194,4 +200,5 @@ class LookupIterator(object):
 
     def getRanges(self,indexLookupInformation : LookupInformation, queue):
       pass
+
 
