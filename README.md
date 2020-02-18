@@ -38,7 +38,8 @@ to facilitate asynchronous searches that use caching to speed up time to first r
 You can quickly and easily build a demo using the scripts provided.  If you wish to set up the demo
 on a single node you can use [fluo-uno](https://github.com/apache/fluo-uno)
 
-Run ./build.sh
+Run the build script in the root of Jangowave's source tree
+    
     ./build.sh
     
 OR the following commands:
