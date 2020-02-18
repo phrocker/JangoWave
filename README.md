@@ -38,7 +38,10 @@ to facilitate asynchronous searches that use caching to speed up time to first r
 You can quickly and easily build a demo using the scripts provided.  If you wish to set up the demo
 on a single node you can use [fluo-uno](https://github.com/apache/fluo-uno)
 
-Run ./build.sh from root or the following commands:
+Run ./build.sh
+    ./build.sh
+    
+OR the following commands:
 
     docker-compose build --force-rm --no-cache && docker-compose up --detach
     docker-compose run web migrate.py makemigrations
