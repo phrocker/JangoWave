@@ -9,10 +9,14 @@ parser.add_argument('--host', dest='nifi_host',
                    help='nifi host name')
 parser.add_argument('--zookeepers', dest='zookeeper_list', default="localhost:2181",
                    help='nifi host name')
+parser.add_argument('--instance', dest='instance', default="uno",
+                    help='instance name')
 args = parser.parse_args()
 
 nifi_host = args.nifi_host
+instance = args.instance
 zookeeper_list = args.zookeeper_list
+
 
 if not nifi_host.endswith("/"):
    nifi_host = nifi_host + "/"
@@ -22,7 +26,7 @@ nipyapi.config.nifi_config.host = nifi_host + "nifi-api"
 root_pg_id = nipyapi.canvas.get_root_pg_id()
 
 #print(root_pg_id)
-import requests 
+import requests
 
 post_path = nifi_host + "nifi-api/controller/reporting-tasks"
 import json
@@ -36,11 +40,11 @@ outy = {
 'state' : 'RUNNING',
 'type':'org.apache.nifi.accumulo.reporting.AccumuloReportingTask',
 'schedulingPeriod': '5s',
-'bundle': {'artifact':'nifi-accumulo-nar','group':'org.apache.nifi','version':'1.10.0'},
+'bundle': {'artifact':'nifi-accumulo-nar','group':'org.apache.nifi','version':'1.11.2'},
               'name':'AccumuloReportingTask',
               'properties': {'Table Name': 'provenance','Accumulo Password':'secret',
                              'Accumulo User':'root',
-                             'Instance Name':'uno',
+                             'Instance Name':instance,
                              'ZooKeeper Quorum': zookeeper_list}
                }}
 headers = {'Content-Type': 'application/json' }

@@ -10,9 +10,12 @@ parser.add_argument('--host', dest='nifi_host',
                    help='nifi host name')
 parser.add_argument('--zookeepers', dest='zookeeper_list', default="localhost:2181",
                    help='nifi host name')
+parser.add_argument('--instance', dest='instance', default="uno",
+                    help='instance name')
 args = parser.parse_args()
 
 nifi_host = args.nifi_host
+instance = args.instance
 zookeeper_list = args.zookeeper_list
 
 if not nifi_host.endswith("/"):
@@ -39,12 +42,13 @@ flow = nipyapi.templates.deploy_template(root_pg_id,template_entity.id,2000,2000
 
 
 jd = canvas.get_process_group('jangowave_demo')
-for cs in canvas.list_all_controllers(jd.id):       
-    print(jd.id + " has " + cs.id + " " + cs.component.name)
-    if cs.status.run_status != "ENABLED" and cs.component.name == "AccumuloService":
-        config_update = nifi.models.controller_service_dto.ControllerServiceDTO(properties={"Accumulo Password": "secret", "ZooKeeper Quorum": zookeeper_list })
-        canvas.update_controller(cs,config_update)
+for cs in canvas.list_all_processors(jd.id):       
+    if cs.status.run_status != "ENABLED" and cs.component.name == "RecordIngest":
+        config_update = nifi.models.processor_config_dto.ProcessorConfigDTO(properties={"Accumulo User": "root", "Instance Name": instance, "Accumulo Password": "secret", "ZooKeeper Quorum": zookeeper_list })
+        canvas.update_processor(cs,config_update)
 for cs in canvas.list_all_controllers(jd.id):
     canvas.schedule_controller(cs,True)
+for cs in canvas.list_all_processors(jd.id):
+    canvas.schedule_processor(cs,True)
 canvas.schedule_process_group(jd.id,True)
 

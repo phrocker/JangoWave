@@ -8,8 +8,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Deploy the sample flow.')
 parser.add_argument('--host', dest='nifi_host',
                    help='nifi host name')
-parser.add_argument('--zookeepers', dest='zookeeper_list', default="localhost:2181",
-                   help='nifi host name')
+
 args = parser.parse_args()
 
 nifi_host = args.nifi_host

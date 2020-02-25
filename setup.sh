@@ -12,12 +12,12 @@ fi
 echo "Setting up Apache NiFi"
 while [ $status -ne 0 ]
 do
-	cmd="python3.7 deploy_flow.py --host http://localhost:8080/ --zookeepers ${ZK_LIST}"
+	cmd="python3.7 deploy_flow.py --host http://localhost:8080/ --instance ${ACC_INST} --zookeepers ${ZK_LIST}"
 	$cmd 2>/dev/null
 	status=$?
 	if [ $status -ne 0 ]; then
 		echo "NiFi not available, sleeping 10 seconds..."
-		cmd="python3.7 delete_template.py --host http://localhost:8080/ --zookeepers ${ZK_LIST}"
+		cmd="python3.7 delete_template.py --host http://localhost:8080/ "
 		$cmd 2>/dev/null
 		sleep 10
 	fi
@@ -25,7 +25,7 @@ done
 
 ## deploy and start the reporting task
 
-python3.7 deploy_reportingtask.py  --host http://localhost:8080/ --zookeepers ${ZK_LIST}
+python3.7 deploy_reportingtask.py  --host http://localhost:8080/ --instance ${ACC_INST} --zookeepers ${ZK_LIST}
 
 echo "Apache NiFi setup complete"
 
