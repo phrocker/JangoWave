@@ -31,7 +31,7 @@ import multiprocessing
 from django.views.generic import TemplateView, ListView, View
 from stronghold.views import StrongholdPublicMixin
 import threading
-from .models import FileUpload, AccumuloCluster, Query, UserAuths, Auth, IngestConfiguration
+from .models import FileUpload, AccumuloCluster, Query, UserAuths, Auth, IngestConfiguration,  Result, ScanResult, EdgeQuery
 from .forms import DocumentForm
 from .rangebuilder import *
 from luqum.parser import lexer, parser, ParseError
@@ -40,6 +40,8 @@ from luqum.utils import UnknownOperationResolver, LuceneTreeVisitorV2
 from luqum.exceptions import OrAndAndOnSameLevel
 from luqum.tree import OrOperation, AndOperation, UnknownOperation
 from luqum.tree import Word  # noqa: F401
+
+from .celery import run_edge_query
 
 from collections import deque
 import queue
@@ -58,6 +60,20 @@ faulthandler.enable()
 
 import pysharkbite
 
+class JSONResponseMixin(object):
+    def render_to_response(self, context):
+        "Returns a JSON response containing 'context' as payload"
+        return self.get_json_response(self.convert_context_to_json(context))
+
+    def get_json_response(self, content, **httpresponse_kwargs):
+        "Construct an `HttpResponse` object."
+        return http.HttpResponse(
+            content, content_type="application/json", **httpresponse_kwargs
+        )
+
+    def convert_context_to_json(self, context):
+        "Convert the context dictionary into a JSON object"
+        return json.dumps(context, cls=ComplexEncoder)
 
 class ZkInstance(object):
     _instance = None
@@ -618,7 +634,7 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
             userAuths.add(authset)
       except:
         pass
-      context = { 'admin': request.user.is_superuser, 'authenticated':True, 'userAuths': userAuths }
+      context = { "admin": request.user.is_superuser, "authenticated":True, 'userAuths': userAuths }
       return render(request,self.template_name,context)
 
 
@@ -666,8 +682,83 @@ class MetadataView(StrongholdPublicMixin,TemplateView):
       else:
           useruploads = int(cachedVal)
 
-      context = {'useruploads':useruploads,'ingestcomplete': ingestcomplete,'ingestcount': ingestcount, 'admin': request.user.is_superuser, 'authenticated':True}
+      context = {'useruploads':useruploads,'ingestcomplete': ingestcomplete,'ingestcount': ingestcount, "admin": request.user.is_superuser, "authenticated":True}
       return render(request,self.template_name,context)
+
+
+class EdgeQueryView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    query_template = 'edge_query.html'
+    result_template = 'edge_results.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      query = request.GET.get("query")
+      query_id = request.GET.get("query_id")
+      auths= request.GET.get("authstring")
+      if not auths:
+        auths=""
+      if not query:
+        if (not query_id):
+          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
+          return render(request,self.query_template,context)
+        else:
+          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
+          return render(request,self.result_template,context)
+      else:
+        eq = EdgeQuery.objects.create(query_id=str(uuid.uuid4()), query=query, auths=auths, running=False, finished=False)
+        eq.save
+        sr = ScanResult.objects.create(user=request.user,query_id=eq.query_id,authstring=auths,is_finished=False)
+        sr.save()
+        run_edge_query.delay(eq.query_id)
+        context = {"query_id" : eq.query_id, "auths" : auths, "query" : query, "admin": request.user.is_superuser, "authenticated":True}
+        return render(request,self.result_template,context)
+
+    
+
+class EdgeQueryResults(JSONResponseMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      query_id = request.GET.get("query_id")
+
+      context = {}
+      context["is_finished"] = False
+      direction_mapping = dict()
+      ## row will be the to
+      ## direction will be the cf
+      ## date will be cq
+      ## value will be count/uuid
+
+      if query_id:
+        rez = ScanResult.objects.filter(query_id=query_id,user=request.user).first()
+        if (rez):
+          context["is_finished"] = rez.is_finished
+          for res in rez.result_set.all():
+            value_split = res.value.split("/")
+            if not res.cf in direction_mapping:
+              direction_mapping[ res.cf ] = dict() 
+            if not res.row in direction_mapping[res.cf]:
+              direction_mapping[res.cf][res.row] = list()
+              direction_mapping[res.cf][res.row].append( int( value_split[0] ) )
+            else:
+              direction_mapping[res.cf][res.row].append( int( value_split[0] ) )
+          context["results"] = direction_mapping
+      return self.render_to_response(context)
+  
 
 class ComplexEncoder(json.JSONEncoder):
     """Always return JSON primitive."""
@@ -680,20 +771,7 @@ class ComplexEncoder(json.JSONEncoder):
                 return obj.pk
             return str(obj)
 
-class JSONResponseMixin(object):
-    def render_to_response(self, context):
-        "Returns a JSON response containing 'context' as payload"
-        return self.get_json_response(self.convert_context_to_json(context))
 
-    def get_json_response(self, content, **httpresponse_kwargs):
-        "Construct an `HttpResponse` object."
-        return http.HttpResponse(
-            content, content_type="application/json", **httpresponse_kwargs
-        )
-
-    def convert_context_to_json(self, context):
-        "Convert the context dictionary into a JSON object"
-        return json.dumps(context, cls=ComplexEncoder)
 
 
 def daterange(start_date, end_date):
@@ -811,7 +889,7 @@ class FieldMetadataView(StrongholdPublicMixin,TemplateView):
       else:
         metadata = caches['metadata'].get("field")
 
-      context={ 'admin': request.user.is_superuser, 'authenticated':True, 'metadata': json.loads(metadata) }
+      context={ "admin": request.user.is_superuser, "authenticated":True, 'metadata': json.loads(metadata) }
       return render(request,'fieldmetadata.html',context)
 
 
@@ -1005,13 +1083,13 @@ class FileUploadView(StrongholdPublicMixin,TemplateView):
                   print("Could not find a suitable post location")
             return HttpResponseRedirect('/files/status')
 
-        context = {'admin': request.user.is_superuser, 'authenticated':True, 'form' : form}
+        context = {"admin": request.user.is_superuser, "authenticated":True, 'form' : form}
         return render(request, self.template_name, context)
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
       form = DocumentForm()
-      context = {'admin': request.user.is_superuser, 'authenticated':True, 'form' : form}
+      context = {"admin": request.user.is_superuser, "authenticated":True, 'form' : form}
       return render(request, self.template_name, context)
 
 class FileStatusView(StrongholdPublicMixin,TemplateView):
@@ -1035,7 +1113,7 @@ class FileStatusView(StrongholdPublicMixin,TemplateView):
           if len(ind) == 2:
             obj.originalfile = ind[1]
             obj.save()
-      context = {'admin': request.user.is_superuser, 'authenticated':True, 'uploads': objs}
+      context = {"admin": request.user.is_superuser, "authenticated":True, 'uploads': objs}
       return render(request, self.template_name, context)
 
 
@@ -1134,5 +1212,5 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
         pass
       s="|"
       authy= s.join(authlist)
-      context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, 'admin': request.user.is_superuser, 'authenticated':True,'userAuths':userAuths,'query': entry}
+      context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, "admin": request.user.is_superuser, "authenticated":True,'userAuths':userAuths,'query': entry}
       return render(request,'search_results.html',context)

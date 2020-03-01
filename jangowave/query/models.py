@@ -25,6 +25,11 @@ class IngestConfiguration(models.Model):
     use_provenance = models.BooleanField()
     provenanceTable = models.CharField(max_length=255,default="provenance")
 
+#class QueryConfiguration(models.Model):
+    ## post location. If not defined then
+#    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+
+    
 import os
 def update_filename(instance, filename):
     ext = filename
@@ -33,6 +38,37 @@ def update_filename(instance, filename):
     instance.filename = filename
     instance.status = "NEW"
     return os.path.join('files', filename)
+
+
+class ScanResult(models.Model):
+    query_id = models.CharField(max_length=400)
+    is_finished = models.BooleanField(default=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    authstring = models.CharField(max_length=255)
+    last_access = models.DateTimeField(auto_now_add=True)
+    posting_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+      return self.query_id
+
+class Result(models.Model):
+    scanResult = models.ForeignKey(ScanResult, on_delete=models.CASCADE)
+    row = models.CharField(max_length=2550,default="")
+    cf = models.CharField(max_length=2550,default="")
+    cq = models.CharField(max_length=2550,default="")
+    value = models.CharField(max_length=2550,default="")
+
+
+class EdgeQuery(models.Model):
+    query = models.CharField(max_length=400)
+    auths = models.CharField(max_length=400)
+    running = models.BooleanField()
+    finished = models.BooleanField()
+    query_id = models.CharField(max_length=400)
+
+    def __str__(self):
+      return self.query_id
+
 
 class FileUpload(models.Model):
     filename = models.CharField(max_length=2550)
@@ -51,6 +87,7 @@ class AccumuloCluster(models.Model):
      password = models.CharField(max_length=255)
      dataTable = models.CharField(max_length=255,default="shard")
      indexTable = models.CharField(max_length=255,default="shardIndex")
+     edgeTable  = models.CharField(max_length=255,default="graph")
      reverseIndexTable = models.CharField(max_length=255,default="shardReverseIndex")
 
      def save(self, *args, **kwargs):

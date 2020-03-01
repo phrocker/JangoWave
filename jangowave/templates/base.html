@@ -15,10 +15,44 @@
   src="https://code.jquery.com/jquery-3.4.1.min.js"
   integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
   crossorigin="anonymous"></script>
-
+  <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 
 <script>
+function populateBoxPlot(divname,url){
+    // https://stackoverflow.com/questions/4999002/repeat-jquery-json-request-until-condition-is-met
+    $.getJSON(url, function(result) {
+        // do something else
+
+        var data = [];
+
+        $.each(result.results, function( k, v ) {
+            
+            $.each(result.results[k], function( kk, vv ) {
+            name = k + "//" + kk
+                var trace1 = {
+                    x: result.results[k][kk],
+                    type: 'box',
+                    name: name
+                };
+
+                data.push(trace1)
+            });
+
+        });
+        var layout = {
+        title: 'Edge table Plots'
+        };
+
+        Plotly.newPlot(divname, data, layout);
+
+        if(!result.is_finished) {
+            console.log("refreshing ")
+            setTimeout(populateBoxPlot, 2000);
+        }
+    });
+}
+
 
 function deleteEvent(query,auths,shard,uid,datatype){
 $.ajax({
@@ -32,7 +66,7 @@ $.ajax({
 }
 
 function jsontable(){
-    console.log("oh")
+    
     $( "#tablediv" ).hide();
 $( "#jsondiv" ).show();
 }

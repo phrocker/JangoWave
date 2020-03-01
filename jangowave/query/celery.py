@@ -11,6 +11,7 @@ from celery import Celery
 from celery.decorators import periodic_task
 from datetime import timedelta
 import Uid_pb2
+import EdgeData_pb2
 # set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'queryapp.settings')
 
@@ -124,7 +125,89 @@ def pouplateEventCountMetadata():
             caches['eventcount'].set(field,str(mapping[field]),3600*48)
         except:
           pass
-        
+
+@shared_task
+def run_edge_query(query_id):
+  model = apps.get_model(app_label='query', model_name='EdgeQuery')
+  objs = model.objects.filter(query_id=query_id)
+  print("Checking edge queries for " + query_id)
+  for obj in objs:
+    obj.running = True
+    obj.save()
+    print("Found edge query " + obj.query_id)
+    import pysharkbite
+    conf = pysharkbite.Configuration()
+    conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+    model = apps.get_model(app_label='query', model_name='AccumuloCluster')
+    accumulo_cluster = model.objects.first()
+    if accumulo_cluster is None:
+      print("No accumulo cluster")
+      return;
+    zk = pysharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
+    user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
+    connector = pysharkbite.AccumuloConnector(user, zk)
+    auths = pysharkbite.Authorizations()
+#    if obj.auths:
+#      for auth in obj.auths.split(","):
+#        auths.addAuthorization(auth)
+    
+    
+    sres_model = apps.get_model(app_label='query', model_name='ScanResult')
+    res_model = apps.get_model(app_label='query', model_name='Result')
+    sr = sres_model.objects.filter(query_id=obj.query_id).first()
+    if not sr:
+      print("No scan result, returning")
+      return
+    print("here")
+
+    graphTableOps = connector.tableOps("graph")
+    scanner = graphTableOps.createScanner(auths,10)
+    print("Query is looking for " + obj.query )
+    range = pysharkbite.Range(obj.query,True,obj.query + "\uffff" + "\uffff",False) ## for now the range should be this
+    scanner.addRange(range)
+    resultset = scanner.getResultSet()
+    count=0
+    try:
+      for indexKeyValue in resultset:
+        print("Got result " + indexKeyValue.getKey().getRow())
+        value = "0"
+        ## row will be the to 
+        ## direction will be the cf
+        to_value = ""
+        direction="one"
+        try:
+          to_value = indexKeyValue.getKey().getRow().split("\u0000")[1]
+          direction = indexKeyValue.getKey().getColumnFamily().split("/")[1]
+          direction_split = direction.split("-")
+          if len(direction_split) != 2 or direction_split[0] == direction_split[1]:
+            continue
+          protobuf = EdgeData_pb2.EdgeValue()
+          protobuf.ParseFromString(indexKeyValue.getValue().get().encode())
+          value = str(protobuf.count) + "/" + protobuf.uuid_string
+        except Exception as e: 
+          continue
+          print(e)
+        except:
+          print("An error occurred")
+          continue
+        scanresult = res_model.objects.create(scanResult=sr,value=value,row=to_value,cf=direction,cq=indexKeyValue.getKey().getColumnQualifier())
+        scanresult.save()
+        count=count+1
+        if count > 1000:
+          break
+      sr.is_finished=True
+      print("Finished")
+      sr.save()
+      scanner.close()
+      print("Finished")
+    except Exception as e: print(e)
+    except:
+      print("An error occurred")
+      pass ## user does not have PROV
+    obj.running = False
+    obj.finished = True
+    obj.save()
+  
 
 @shared_task
 def initial_upload():

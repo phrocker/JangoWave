@@ -70,6 +70,9 @@ def run(*args):
             table_ops = connector.tableOps("shardReverse")
             if not table_ops.exists(False):
                 table_ops.create(False)
+            table_ops = connector.tableOps("graph")
+            if not table_ops.exists(False):
+                table_ops.create(False)
             table_ops = connector.tableOps("provenance")
             if not table_ops.exists(False):
                 table_ops.create(False)

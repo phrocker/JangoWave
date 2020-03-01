@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load extras %}
+
+
+{% block title %}Jangowave Edge Search{% endblock %}
+
+{% block content %}
+
+<div align="center">
+<h1>Edge Query Results</h1>
+<div id="graph">
+</div>
+<script type="text/javascript">
+    populateBoxPlot('graph','/edge/results?query_id={{query_id}}')
+   </script>  
+
+</div>
+{% endblock %}

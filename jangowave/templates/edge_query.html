@@ -1,0 +1,22 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Welcome to JangoWave{% endblock %}
+
+{% block content %}>
+<div class="form">
+<h1>Enter a keyword to traverse the graph</h1>
+
+<form action="/edge" method="get">
+  <input name="query" type="text" placeholder="Search...">
+  Authorizations:<br>
+<select multiple name="auths">
+{% for auth in userAuths %}{{auth}}
+<option value="{{auth}}">{{auth}}</option>
+{% endfor %}
+</select>
+  <input type="submit" >
+
+</form>
+</div>
+{% endblock %}
