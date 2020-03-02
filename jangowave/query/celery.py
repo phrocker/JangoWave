@@ -130,26 +130,23 @@ def pouplateEventCountMetadata():
 def run_edge_query(query_id):
   model = apps.get_model(app_label='query', model_name='EdgeQuery')
   objs = model.objects.filter(query_id=query_id)
-  print("Checking edge queries for " + query_id)
   for obj in objs:
     obj.running = True
     obj.save()
-    print("Found edge query " + obj.query_id)
     import pysharkbite
     conf = pysharkbite.Configuration()
     conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
     model = apps.get_model(app_label='query', model_name='AccumuloCluster')
     accumulo_cluster = model.objects.first()
     if accumulo_cluster is None:
-      print("No accumulo cluster")
       return;
     zk = pysharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
     user = pysharkbite.AuthInfo("root","secret", zk.getInstanceId())
     connector = pysharkbite.AccumuloConnector(user, zk)
     auths = pysharkbite.Authorizations()
-#    if obj.auths:
-#      for auth in obj.auths.split(","):
-#        auths.addAuthorization(auth)
+    if obj.auths:
+      for auth in obj.auths.split(","):
+        auths.addAuthorization(auth)
     
     
     sres_model = apps.get_model(app_label='query', model_name='ScanResult')
@@ -162,14 +159,12 @@ def run_edge_query(query_id):
 
     graphTableOps = connector.tableOps("graph")
     scanner = graphTableOps.createScanner(auths,10)
-    print("Query is looking for " + obj.query )
     range = pysharkbite.Range(obj.query,True,obj.query + "\uffff" + "\uffff",False) ## for now the range should be this
     scanner.addRange(range)
     resultset = scanner.getResultSet()
     count=0
     try:
       for indexKeyValue in resultset:
-        print("Got result " + indexKeyValue.getKey().getRow())
         value = "0"
         ## row will be the to 
         ## direction will be the cf
@@ -182,13 +177,12 @@ def run_edge_query(query_id):
           if len(direction_split) != 2 or direction_split[0] == direction_split[1]:
             continue
           protobuf = EdgeData_pb2.EdgeValue()
-          protobuf.ParseFromString(indexKeyValue.getValue().get().encode())
+          protobuf.ParseFromString(indexKeyValue.getValue().get_bytes())
           value = str(protobuf.count) + "/" + protobuf.uuid_string
         except Exception as e: 
-          continue
           print(e)
+          continue
         except:
-          print("An error occurred")
           continue
         scanresult = res_model.objects.create(scanResult=sr,value=value,row=to_value,cf=direction,cq=indexKeyValue.getKey().getColumnQualifier())
         scanresult.save()
@@ -196,10 +190,8 @@ def run_edge_query(query_id):
         if count > 1000:
           break
       sr.is_finished=True
-      print("Finished")
       sr.save()
       scanner.close()
-      print("Finished")
     except Exception as e: print(e)
     except:
       print("An error occurred")

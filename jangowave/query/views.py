@@ -134,7 +134,7 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
       for indexKeyValue in indexSet:
         value = indexKeyValue.getValue()
         protobuf = Uid_pb2.List()
-        protobuf.ParseFromString(value.get().encode())
+        protobuf.ParseFromString(value.get_bytes())
         for uidvalue in protobuf.UID:
             shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
             datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
@@ -700,6 +700,7 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
       query = request.GET.get("query")
+      original_query = request.GET.get("originalquery")
       query_id = request.GET.get("query_id")
       auths= request.GET.get("authstring")
       if not auths:
@@ -709,7 +710,7 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
           context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
           return render(request,self.query_template,context)
         else:
-          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
+          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True, "query" : original_query}
           return render(request,self.result_template,context)
       else:
         eq = EdgeQuery.objects.create(query_id=str(uuid.uuid4()), query=query, auths=auths, running=False, finished=False)
@@ -718,7 +719,9 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
         sr.save()
         run_edge_query.delay(eq.query_id)
         context = {"query_id" : eq.query_id, "auths" : auths, "query" : query, "admin": request.user.is_superuser, "authenticated":True}
-        return render(request,self.result_template,context)
+        url = "/edge/?query_id=" + str(eq.query_id) + "&auths=" + auths + "&originalquery=" + query
+        return HttpResponseRedirect(url)
+       # return render(request,self.result_template,context)
 
     
 

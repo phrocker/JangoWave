@@ -19,12 +19,14 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 
 <script>
-function populateBoxPlot(divname,url){
+function populateBoxPlot(divname,url,query,auths){
     // https://stackoverflow.com/questions/4999002/repeat-jquery-json-request-until-condition-is-met
     $.getJSON(url, function(result) {
         // do something else
 
         var data = [];
+
+        var keyterms = [];
 
         $.each(result.results, function( k, v ) {
             
@@ -35,20 +37,30 @@ function populateBoxPlot(divname,url){
                     type: 'box',
                     name: name
                 };
-
+                keyterms.push(kk)
                 data.push(trace1)
             });
 
         });
         var layout = {
-        title: 'Edge table Plots'
+        title: 'Edge table Plots for ' + query
         };
 
         Plotly.newPlot(divname, data, layout);
+        var myPlot = document.getElementById(divname)
+ 
+        myPlot.on('plotly_legendclick', function(data){
+            var win = window.open("/edge/?query=" + keyterms[data.curveNumber] + "&auths=" + auths, '_blank');
+            win.focus();
+        
+        return false;
+        });
 
         if(!result.is_finished) {
             console.log("refreshing ")
-            setTimeout(populateBoxPlot, 2000);
+            setTimeout(function() {
+                populateBoxPlot(divname,url,query,auths);
+            }, 1000)
         }
     });
 }

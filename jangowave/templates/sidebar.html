@@ -31,23 +31,35 @@
         <!-- sidebar menu: : style can be found in sidebar.less -->
         {% block nav_links_ul %}
         <nav class="mt-2">
-            <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+            <ul class="nav nav-pills nav-sidebar nav-child-indent flex-column" data-widget="treeview" role="menu" data-accordion="false">
             {% block nav_links_outer %}
             <li class="nav-header">{% block nav_heading %}ANALYST TOOLS{% endblock %}</li>
 
             {% block nav_links %}
-                <li class="nav-item">
+                <li class="nav-item has-treeview menu-open">
                     <a href="/" class="nav-link">
                         <i class="nav-icon fas fa-search"></i>
-                        <p>Search Accumulo</p>
+                        <p>Search Accumulo
+                            <i class="right fas fa-angle-left"></i>
+                        </p>
                     </a>
+                    <ul class="nav nav-treeview">
+                        <li class="nav-item">
+                            <a href="/" class="nav-link">
+                                <!--<i class="far fa-circle nav-icon"></i>-->
+                                <i class="fas fa-file-alt"></i>
+                                <p>Document Search</p>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="/edge" class="nav-link">
+                                <i class="fas fa-project-diagram"></i>
+                                <p>Graph Search</p>
+                            </a>
+                        </li>
+                      </ul>
                 </li>
-                <li class="nav-item">
-                    <a href="/edge" class="nav-link">
-                        <i class="fas fa-project-diagram"></i>
-                        <p>Search Graph</p>
-                    </a>
-                </li>
+            
                 
  {% if admin %}
                 <li class="nav-item">
