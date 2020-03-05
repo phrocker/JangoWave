@@ -64,6 +64,7 @@ class EdgeQuery(models.Model):
     auths = models.CharField(max_length=400)
     running = models.BooleanField()
     finished = models.BooleanField()
+    parent_query_id = models.CharField(max_length=400,default="")
     query_id = models.CharField(max_length=400)
 
     def __str__(self):

@@ -10,8 +10,11 @@
 <h1>Edge Query Results</h1>
 <div id="graph">
 </div>
+{% for root in roots %}
+<a href="/edge/?parent_query_id={{root.parent_query_id}}&query_id={{root.query_id}}&originalquery={{root.query}}">{{root.query}}</a> //
+{% endfor %}
 <script type="text/javascript">
-    populateBoxPlot('graph','/edge/results?query_id={{query_id}}','{{query}}','{{auths}}')
+    populateBoxPlot('graph','{{query_id}}','/edge/results?query_id={{query_id}}','{{query}}','{{auths}}')
    </script>  
 
 </div>

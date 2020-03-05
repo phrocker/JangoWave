@@ -697,29 +697,55 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
     def dispatch(self, *args, **kwargs):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
+    def get_roots(self,parent_query_id, request):
+      roots = list()
+      print("Finding parent queries for " + parent_query_id)
+      parent_query_set = EdgeQuery.objects.filter(query_id=parent_query_id)
+      if parent_query_set:
+        query = parent_query_set.first()
+        roots.extend( self.get_roots(query.parent_query_id,request))
+        edge = {
+          "parent_query_id" : query.parent_query_id,
+          "query_id": query.query_id,
+          "query" : query.query
+        }
+        roots.append( edge )
+      return roots
+        
+
+
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
       query = request.GET.get("query")
       original_query = request.GET.get("originalquery")
       query_id = request.GET.get("query_id")
+      parent_query_id = request.GET.get("parent_query_id")
       auths= request.GET.get("authstring")
+      if not parent_query_id:
+        parent_query_id = ""
       if not auths:
         auths=""
       if not query:
-        if (not query_id):
+        if not query_id:
           context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
           return render(request,self.query_template,context)
         else:
-          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True, "query" : original_query}
+          roots = list()
+          if parent_query_id and len(parent_query_id) > 0:
+            roots = self.get_roots(parent_query_id,request)
+          context = {"roots" : roots, "parent_query_id" : parent_query_id,"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True, "query" : original_query}
           return render(request,self.result_template,context)
       else:
-        eq = EdgeQuery.objects.create(query_id=str(uuid.uuid4()), query=query, auths=auths, running=False, finished=False)
+        eq = EdgeQuery.objects.create(parent_query_id=parent_query_id,query_id=str(uuid.uuid4()), query=query, auths=auths, running=False, finished=False)
         eq.save
         sr = ScanResult.objects.create(user=request.user,query_id=eq.query_id,authstring=auths,is_finished=False)
         sr.save()
         run_edge_query.delay(eq.query_id)
         context = {"query_id" : eq.query_id, "auths" : auths, "query" : query, "admin": request.user.is_superuser, "authenticated":True}
-        url = "/edge/?query_id=" + str(eq.query_id) + "&auths=" + auths + "&originalquery=" + query
+        pq = ""
+        if len(parent_query_id) > 0:
+          pq = "parent_query_id=" + parent_query_id + "&"
+        url = "/edge/?" + pq + "query_id=" + str(eq.query_id) + "&auths=" + auths + "&originalquery=" + query
         return HttpResponseRedirect(url)
        # return render(request,self.result_template,context)
 

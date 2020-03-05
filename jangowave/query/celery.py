@@ -171,14 +171,15 @@ def run_edge_query(query_id):
         to_value = ""
         direction="one"
         try:
+          protobuf = EdgeData_pb2.EdgeValue()
+          protobuf.ParseFromString(indexKeyValue.getValue().get_bytes())
+          value = str(protobuf.count) + "/" + protobuf.uuid_string
           to_value = indexKeyValue.getKey().getRow().split("\u0000")[1]
           direction = indexKeyValue.getKey().getColumnFamily().split("/")[1]
           direction_split = direction.split("-")
           if len(direction_split) != 2 or direction_split[0] == direction_split[1]:
             continue
-          protobuf = EdgeData_pb2.EdgeValue()
-          protobuf.ParseFromString(indexKeyValue.getValue().get_bytes())
-          value = str(protobuf.count) + "/" + protobuf.uuid_string
+          
         except Exception as e: 
           print(e)
           continue

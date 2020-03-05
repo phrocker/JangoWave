@@ -19,7 +19,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 
 <script>
-function populateBoxPlot(divname,url,query,auths){
+function populateBoxPlot(divname,query_id,url,query,auths){
     // https://stackoverflow.com/questions/4999002/repeat-jquery-json-request-until-condition-is-met
     $.getJSON(url, function(result) {
         // do something else
@@ -50,9 +50,9 @@ function populateBoxPlot(divname,url,query,auths){
         var myPlot = document.getElementById(divname)
  
         myPlot.on('plotly_legendclick', function(data){
-            var win = window.open("/edge/?query=" + keyterms[data.curveNumber] + "&auths=" + auths, '_blank');
-            win.focus();
-        
+            //var win = window.open("/edge/?parent_query_id=" + query_id + "&query=" + keyterms[data.curveNumber] + "&auths=" + auths);
+            //win.focus();
+            window.location.href = "/edge/?parent_query_id=" + query_id + "&query=" + keyterms[data.curveNumber] + "&auths=" + auths;
         return false;
         });
 
