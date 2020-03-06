@@ -25,7 +25,8 @@ SECRET_KEY = 'nti&=qe0wwhdq^rubpafqh78a9@mrpg+tr6)ytua=v968qkw5-'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["::1","localhost","10.1.0.68","mycluster-workers-41"]
+## ADD your allowed hosts here
+ALLOWED_HOSTS = ["::1","localhost"]
 
 
 # Application definition
