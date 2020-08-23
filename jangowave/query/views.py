@@ -38,7 +38,7 @@ from luqum.parser import lexer, parser, ParseError
 from luqum.pretty import prettify
 from luqum.utils import UnknownOperationResolver, LuceneTreeVisitorV2
 from luqum.exceptions import OrAndAndOnSameLevel
-from luqum.tree import OrOperation, AndOperation, UnknownOperation
+from luqum.tree import OrOperation, AndOperation, UnknownOperation, Range as LuceneRange
 from luqum.tree import Word  # noqa: F401
 
 from .celery import run_edge_query
@@ -118,8 +118,17 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
     indexScanner = index_table_ops.createScanner(lookupInformation.getAuths(),1)
 
     fv = rng.getValue()
-
-    if fv.endswith("*"):
+    up = rng.upperbound()
+    if not up is None:
+      upper = str(up).lower()
+      fv = str(fv)
+      if upper == "*":
+        print("start at " + rng.getValue().lower() + " end at inf")
+        indexrange = pysharkbite.Range(rng.getValue().lower(),True,"\uffff",False)
+      else:
+        print("oh  " + fv.lower() + " to " + upper)
+        indexrange = pysharkbite.Range(fv.lower(),True,upper,True)
+    elif fv.endswith("*"):
       base = fv.replace('*', '')
       indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
     else:
@@ -127,19 +136,42 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
 
     indexScanner.addRange(indexrange)
     if not  rng.getField() is None:
+      print("Fetching a colunn")
       indexScanner.fetchColumn(rng.getField().upper(),"")
     indexSet = indexScanner.getResultSet()
-
+    print("oh")
     try:
+      prevfield = None
       for indexKeyValue in indexSet:
         value = indexKeyValue.getValue()
         protobuf = Uid_pb2.List()
         protobuf.ParseFromString(value.get_bytes())
-        for uidvalue in protobuf.UID:
+        print("oh no")
+        if (protobuf.IGNORE or len(protobuf.UID) == 0):
+              shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
+              datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+              if not prevfield is None:
+                tkn = prevfield +"_TOKEN"
+                print("Got " + prevfield + " and " + tkn)
+                if indexKeyValue.getKey().getColumnFamily() == tkn:
+                  print("skipping")
+                  continue
+              prevfield = indexKeyValue.getKey().getColumnFamily()
+              output.put( Range(datatype,shard,"",prevfield,indexKeyValue.getKey().getRow()))
+        else:              
+          for uidvalue in protobuf.UID:
             shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
             datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+            if not prevfield is None:
+                tkn = prevfield +"_TOKEN"
+                print("Got " + prevfield + " and " + tkn)
+                if indexKeyValue.getKey().getColumnFamily() == tkn:
+                  print("skipping")
+                  continue
+            prevfield = indexKeyValue.getKey().getColumnFamily()
             output.put( Range(datatype,shard,uidvalue))
     except:
+      traceback.print_exc()
       pass
     indexScanner.close()
 
@@ -283,6 +315,7 @@ class IndexLookup(LuceneTreeVisitorV2):
         child_context = dict(context) if context is not None else {}
         operation="OR"
         iter = OrIterator()
+        print("got " + op_type_name)
         if op_type_name == "AND":
             iter = AndIterator()
         else:
@@ -388,11 +421,15 @@ class IndexLookup(LuceneTreeVisitorV2):
         #enode = self.visit(node.children[0], parents + [node], child_context)
 
         field = node.name
-        value = node.expr.value
-        if value == "*":
-            raise Exception("Do not support unlimited range queries")
+        if (isinstance(node.expr,LuceneRange)):
+          childs = node.expr.children
+          return RangeLookup(field,childs[0],childs[1])
+        else:
+          value = node.expr.value
+          if value == "*":
+              raise Exception("Do not support unlimited range queries")
 
-        return RangeLookup(field,value)
+          return RangeLookup(field,value)
 
 
     def visit_word(self, node, parents, context):
@@ -455,16 +492,28 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
         except:
             pass
             # Handle empty queue here
+        print("oh here")
         if not docInfo is None:
           tableOps = lookupInformation.getTableOps()
           scanner = tableOps.createScanner(lookupInformation.getAuths(),5)
           startKey = pysharkbite.Key()
           endKey = pysharkbite.Key()
           startKey.setRow(docInfo.getShard())
-          docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+          if (docInfo.isIgnore()):
+            docid = "fi\x00" + docInfo.getField()
+            print("foh fi" + docInfo.getField())
+          else:
+            docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
           startKey.setColumnFamily(docid)
           endKey.setRow(docInfo.getShard())
-          endKey.setColumnFamily(docid + "\xff")
+          if (docInfo.isIgnore()):
+            endKey.setColumnFamily(docid)
+            print("Gettinv alue " + str(docInfo.getVal()))
+            startKey.setColumnQualifier(docInfo.getVal())
+            endKey.setColumnQualifier(docInfo.getVal() + "\xff")
+          else:
+            print("hmm")
+            endKey.setColumnFamily(docid + "\xff")
           print("Searching for " + docInfo.getShard())
           rng = pysharkbite.Range(startKey,True,endKey,True)
 
@@ -478,10 +527,21 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
               startKey = pysharkbite.Key()
               endKey = pysharkbite.Key()
               startKey.setRow(docInfo.getShard())
-              docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+              if (docInfo.isIgnore()):
+                print("foh fi")
+                docid = "fi\x00" + docInfo.getField()
+              else:
+                docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
               startKey.setColumnFamily(docid)
               endKey.setRow(docInfo.getShard())
-              endKey.setColumnFamily(docid + "\xff")
+              if (docInfo.isIgnore()):
+                print("su")
+                endKey.setColumnFamily(docid)
+                startKey.setColumnQualifier(docInfo.getVal())
+                endKey.setColumnQualifier(docInfo.getVal() + "\xff")
+              else:
+                print("nah")
+                endKey.setColumnFamily(docid + "\xff")
               rng = pysharkbite.Range(startKey,True,endKey,True)
               print("Searching for " + docInfo.getShard())
               scanner.addRange(rng)
@@ -503,7 +563,9 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
           time.sleep(0.5)
 
     except:
+      print("eror")
       e = sys.exc_info()[0]
+      traceback.print_exc()
   return True
 
 def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.SimpleQueue, documents : queue.SimpleQueue):
@@ -614,7 +676,7 @@ conf = pysharkbite.Configuration()
 conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
 
 
-#pysharkbite.LoggingConfiguration.enableTraceLogger()
+# pysharkbite.LoggingConfiguration.enableTraceLogger()
 
 class HomePageView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -632,6 +694,31 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
         auths =  UserAuths.objects.get(name=request.user)
         for authset in auths.authorizations.all():
             userAuths.add(authset)
+
+        try:
+            user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+            connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+            secops = connector.securityOps()
+            newauths = pysharkbite.Authorizations()
+            auths = secops.get_auths(AccumuloCluster.objects.first().user)
+            for auth in userAuths:
+              print("Testing auth " , auth)
+              tst = pysharkbite.Authorizations()
+              tst.addAuthorization(auth.auth)
+              if (not auths.contains(auth.auth)):
+                newauths.addAuthorization(auth.auth)
+                print("Adding auth -" + auth.auth + "-")
+            print("nxt")
+            if len( newauths.get_authorizations() ) > 0:
+                
+                print("Granted auths for " + AccumuloCluster.objects.first().user + " result " + str(secops.grantAuthorizations(newauths,AccumuloCluster.objects.first().user)))
+            else:
+                print("no auths to add")
+        except:
+            traceback.print_exc()
+            print("failure!")
+            pass
+        return sv
       except:
         pass
       context = { "admin": request.user.is_superuser, "authenticated":True, 'userAuths': userAuths }
@@ -725,15 +812,26 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
         parent_query_id = ""
       if not auths:
         auths=""
+      
       if not query:
+        userAuths = set()
+        try:
+          auths =  UserAuths.objects.get(name=request.user)
+          user_auths = auths.authorizations.all()
+          if not user_auths is None:
+            for authset in user_auths:
+              userAuths.add(authset)
+        except:
+          pass
         if not query_id:
-          context = {"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True}
+          context = {"query_id" : query_id, "auths" : auths,"userAuths":userAuths, "admin": request.user.is_superuser, "authenticated":True}
           return render(request,self.query_template,context)
         else:
           roots = list()
           if parent_query_id and len(parent_query_id) > 0:
             roots = self.get_roots(parent_query_id,request)
-          context = {"roots" : roots, "parent_query_id" : parent_query_id,"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True, "query" : original_query}
+          
+          context = {"roots" : roots, "parent_query_id" : parent_query_id,"userAuths":userAuths,"query_id" : query_id, "auths" : auths, "admin": request.user.is_superuser, "authenticated":True, "query" : original_query}
           return render(request,self.result_template,context)
       else:
         eq = EdgeQuery.objects.create(parent_query_id=parent_query_id,query_id=str(uuid.uuid4()), query=query, auths=auths, running=False, finished=False)
@@ -741,7 +839,7 @@ class EdgeQueryView(StrongholdPublicMixin,TemplateView):
         sr = ScanResult.objects.create(user=request.user,query_id=eq.query_id,authstring=auths,is_finished=False)
         sr.save()
         run_edge_query.delay(eq.query_id)
-        context = {"query_id" : eq.query_id, "auths" : auths, "query" : query, "admin": request.user.is_superuser, "authenticated":True}
+        context = {"query_id" : eq.query_id, "auths" : auths, "query" : query,"admin": request.user.is_superuser, "authenticated":True}
         pq = ""
         if len(parent_query_id) > 0:
           pq = "parent_query_id=" + parent_query_id + "&"
@@ -943,7 +1041,7 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
       auths = pysharkbite.Authorizations()
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().u4ser,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
       connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
       tableOps = connector.tableOps(AccumuloCluster.objects.first().dataTable)
       scanner = tableOps.createScanner(auths,1)
@@ -1145,6 +1243,23 @@ class FileStatusView(StrongholdPublicMixin,TemplateView):
       context = {"admin": request.user.is_superuser, "authenticated":True, 'uploads': objs}
       return render(request, self.template_name, context)
 
+class FileClearView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'filestatus.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      objs = FileUpload.objects.filter(status="NEW")
+      for obj in objs:
+        obj.status="CANCELLED" 
+        obj.save()
+      return HttpResponseRedirect("/files/status")
 
 class SearchResultsView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'

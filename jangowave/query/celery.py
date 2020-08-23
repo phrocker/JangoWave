@@ -146,7 +146,10 @@ def run_edge_query(query_id):
     auths = pysharkbite.Authorizations()
     if obj.auths:
       for auth in obj.auths.split(","):
+        print("adding auth " + auth)
         auths.addAuthorization(auth)
+    else:
+      auths = connector.securityOps().get_auths("root")
     
     
     sres_model = apps.get_model(app_label='query', model_name='ScanResult')
@@ -159,6 +162,7 @@ def run_edge_query(query_id):
 
     graphTableOps = connector.tableOps("graph")
     scanner = graphTableOps.createScanner(auths,10)
+    print("Looking up " + obj.query)
     range = pysharkbite.Range(obj.query,True,obj.query + "\uffff" + "\uffff",False) ## for now the range should be this
     scanner.addRange(range)
     resultset = scanner.getResultSet()
@@ -197,6 +201,7 @@ def run_edge_query(query_id):
     except:
       print("An error occurred")
       pass ## user does not have PROV
+    print("finished edge query")
     obj.running = False
     obj.finished = True
     obj.save()

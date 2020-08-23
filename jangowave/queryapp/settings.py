@@ -26,7 +26,7 @@ SECRET_KEY = 'nti&=qe0wwhdq^rubpafqh78a9@mrpg+tr6)ytua=v968qkw5-'
 DEBUG = True
 
 ## ADD your allowed hosts here
-ALLOWED_HOSTS = ["::1","localhost"]
+ALLOWED_HOSTS = ['demo.parisi']
 
 
 # Application definition
@@ -126,7 +126,7 @@ USE_TZ = True
 CACHES = {
     'default': {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
+        "LOCATION": "redis://localhost:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient"
         },
@@ -134,7 +134,7 @@ CACHES = {
     },
     'metadata': {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
+        "LOCATION": "redis://localhost:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient"
         },
@@ -142,7 +142,7 @@ CACHES = {
     },
     'eventcount': {
         "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": "redis://redis:6379/1",
+        "LOCATION": "redis://localhost:6379/1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient"
         },

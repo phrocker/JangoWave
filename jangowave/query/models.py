@@ -13,6 +13,7 @@ class Auth(models.Model):
 
     def __str__(self):
       return self.auth
+
 class UserAuths(models.Model):
     ## should probably define  custom user model
     name = models.ForeignKey(User, on_delete=models.CASCADE)

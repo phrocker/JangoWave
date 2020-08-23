@@ -62,16 +62,31 @@ class LookupInformation(object):
         return self._tableOps
 
 class Range:
-    def __init__(self,datatype,shard,docid):
+    def __init__(self,datatype,shard, docid, field=None, value=None):
         self._datatype=datatype
         self._shard=shard
+        if not field is None:
+          self._ignore=True
+        else:
+          self._ignore=False
         self._docid=docid
+        self._field=field
+        self._ivalue=value
 
     def getDataType(self):
         return self._datatype
 
+    def getVal(self):
+        return self._ivalue
+
+    def getField(self):
+        return self._field
+
     def getShard(self):
         return self._shard
+
+    def isIgnore(self):
+        return self._ignore
 
     def getDocId(self):
         return self._docid
@@ -92,12 +107,16 @@ class Range:
        return self._shard < other._shard and self._docid < other._docid
 
 class RangeLookup:
-    def __init__(self,field,value):
+    def __init__(self,field,value, upperbound=None):
         self._field=field
         self._value=value
-
+        self._upperbound=upperbound
+    
     def getValue(self):
         return self._value
+
+    def upperbound(self):
+        return self._upperbound
 
     def getField(self):
         return self._field
@@ -122,11 +141,25 @@ class ForwardIterator(object):
             indexKeyValue = self.it.__next__()
             value = indexKeyValue.getValue()
             protobuf = Uid_pb2.List()
-            protobuf.ParseFromString(value.get().encode())
-            for uidvalue in protobuf.UID:
+            print("for " + str(indexKeyValue.getKey()))
+            try:
+              protobuf.ParseFromString(value.get().encode())
+              print("gotcha')")
+              if (protobuf.IGNORE or len(protobuf.UID) == 0):
+                print("oh no")
+                shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
+                datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+                self._peek=Range(datatype,shard,"",indexKeyValue.getKey().getColumnFamily(),indexKeyValue.getKey().getRow())
+              else:
+                for uidvalue in protobuf.UID:
+                  shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
+                  datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
+                  self._peek=Range(datatype,shard,uidvalue)
+            except:
+              print("oh fhi")
               shard = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[0]
               datatype = indexKeyValue.getKey().getColumnQualifier().split("\u0000")[1]
-              self._peek=Range(datatype,shard,uidvalue)
+              self._peek=Range(datatype,shard,"",indexKeyValue.getKey().getColumnFamily(),indexKeyValue.getKey().getRow())
         except StopIteration:
             self._peek = EndOfIter
         except:
@@ -186,6 +219,7 @@ class LookupIterator(object):
           self._iters[count]=rng
           self._scnrs=None
         else:
+          print("o9hh")
           scnrs[count] = indexTableOps.createScanner(lookupInformation.getAuths(),1)
           indexrange = pysharkbite.Range(rng.getValue())
           scnrs[count].addRange(indexrange)
