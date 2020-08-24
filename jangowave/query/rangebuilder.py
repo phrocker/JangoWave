@@ -47,10 +47,11 @@ resolver = UnknownOperationResolver()
 
 import pysharkbite
 class LookupInformation(object):
-    def __init__(self,lookupTable,auths, tableOps):
+    def __init__(self,lookupTable,auths, tableOps, metadata_table_ops=None):
         self._lookupTable=lookupTable
         self._auths = auths
         self._tableOps = tableOps
+        self._metadata_table_ops=metadata_table_ops
 
     def getLookupTable(self):
         return self._lookupTable
@@ -60,6 +61,9 @@ class LookupInformation(object):
 
     def getTableOps(self):
         return self._tableOps
+
+    def getMetadataTableOps(self):
+        return self._metadata_table_ops
 
 class Range:
     def __init__(self,datatype,shard, docid, field=None, value=None):

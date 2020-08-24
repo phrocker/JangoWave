@@ -1,7 +1,7 @@
 # cities/urls.py
 from django.urls import path
 from django.urls import path, include # new
-from .views import MutateEventView, FileUploadView, HomePageView,FileClearView, SearchResultsView, EdgeQueryResults,EdgeQueryView, MetadataView, FieldMetadataView,MetadataChartView,MetadataEventCountsView, FileStatusView,DeleteEventView
+from .views import MutateEventView, TravelSearchResultsView, TravelSearchView, FileUploadView, HomePageView,FileClearView, SearchResultsView, EdgeQueryResults,EdgeQueryView, MetadataView, FieldMetadataView,MetadataChartView,MetadataEventCountsView, FileStatusView,DeleteEventView
 
 urlpatterns = [
     path('mutate/', MutateEventView.as_view(), name='mutate_page'),
@@ -19,5 +19,7 @@ urlpatterns = [
     path('files/status', FileStatusView.as_view(), name='filestatus'),
     path('accounts/', include('django.contrib.auth.urls')),
     #url(r'^login/$', auth_views.login, name='login'),
+    path('travel/', TravelSearchView.as_view(), name='home'),
+    path('travel/search', TravelSearchResultsView.as_view(), name='home'),
     path('', HomePageView.as_view(), name='home'),
 ]

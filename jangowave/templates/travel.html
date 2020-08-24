@@ -1,0 +1,29 @@
+
+{% extends 'base.html' %}
+
+{% block title %}Welcome to JangoWave{% endblock %}
+
+{% block content %}
+<h1>Search people cross through a toll</h1>
+<div class="form">
+
+
+<form action="/travel/search" method="get">
+
+  Search
+  <input name="q" type="text" placeholder="Traveler search ...">
+  Toll Zip
+  <input name="toll" type="text" placeholder="Toll zipcode...">
+  
+  Authorizations:<br>
+<select multiple name="auths">
+{% for auth in userAuths %}
+{{auth}}
+<option value="{{auth}}">{{auth}}</option>
+{% endfor %}
+</select>
+  <input type="submit" >
+
+</form>
+</div>
+{% endblock %}

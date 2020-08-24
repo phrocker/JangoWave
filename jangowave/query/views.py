@@ -52,9 +52,10 @@ resolver = UnknownOperationResolver()
 import faulthandler
 faulthandler.enable()
 
-#import jnius_config
-#jnius_config.set_classpath('.', '/home/centos/datawave-dev-3.1.0-SNAPSHOT/lib/*')
-#import jnius
+import jnius_config
+#os.getcwd() +
+jnius_config.set_classpath('.',  '/home/demo/deploy/jangowave/libs/*')
+import jnius
 
 
 
@@ -87,6 +88,8 @@ class ZkInstance(object):
         return ZkInstance._instance
 
     def __init__(self):
+
+
         self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
 
     def get(self):
@@ -112,10 +115,84 @@ class CancellationToken:
    def cancelled(self):
        return self._is_cancelled.is_set()
 
+#def getTypes(
+  # try:
+     #  LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
+
+     #  luceneparser = LuceneToJexlQueryParser()
+
+     #   node = luceneparser.parse(entry)
+
+     #   jexl = node.getOriginalQuery()
+     # except:
+     #   pass
+def getTypes(lookup : LookupInformation, field, value) -> None:
+  classes = set()
+  try:
+    table_ops = lookup.getMetadataTableOps()
+    typeInfo_scanner = table_ops.createScanner(lookup.getAuths(),2)
+    print("Looking for " + field)
+    typeInfo_scanner.addRange(pysharkbite.Range(field))
+    typeInfo_scanner.fetchColumn("t","");
+    typeinfo_keys = typeInfo_scanner.getResultSet()
+    for type_info in typeinfo_keys:
+      typename = type_info.getKey().getColumnQualifier().split("\u0000")[1]
+      try:
+          print("got " + typename)
+          normalizer  = jnius.autoclass('datawave.data.type.AutoType')
+
+          typed_normalizer = normalizer()
+
+          nl = typed_normalizer.normalize(typename,value)
+
+          print("normalized " + nl)
+          classes.add(nl)
+      except:
+          traceback.print_exc()
+          print("could not create " + typename)
+          pass
+      
+  except:
+    traceback.print_exc()
+    pass  
+  return classes
+
+def getTypesWithUpper(lookup : LookupInformation, field, value,upper) -> None:
+  classes = list()
+  try:
+    table_ops = lookup.getMetadataTableOps()
+    typeInfo_scanner = table_ops.createScanner(lookup.getAuths(),2)
+    print("Looking for " + field)
+    typeInfo_scanner.addRange(pysharkbite.Range(field))
+    typeInfo_scanner.fetchColumn("t","");
+    typeinfo_keys = typeInfo_scanner.getResultSet()
+    for type_info in typeinfo_keys:
+      typename = type_info.getKey().getColumnQualifier().split("\u0000")[1]
+      try:
+          print("got " + typename)
+          normalizer  = jnius.autoclass('datawave.data.type.AutoType')
+
+          typed_normalizer = normalizer()
+
+          nl = typed_normalizer.normalize(typename,value)
+          nlu = typed_normalizer.normalize(typename,upper)
+
+          print("normalized " + nl)
+          classes.append( (nl,nlu) )
+      except:
+          traceback.print_exc()
+          print("could not create " + typename)
+          pass
+      
+  except:
+    traceback.print_exc()
+    pass  
+  return classes
+
 def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output ) -> None:
     index_table_ops = lookupInformation.getTableOps()
 
-    indexScanner = index_table_ops.createScanner(lookupInformation.getAuths(),1)
+    indexScanner = index_table_ops.createScanner(lookupInformation.getAuths(),5)
 
     fv = rng.getValue()
     up = rng.upperbound()
@@ -124,21 +201,53 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
       fv = str(fv)
       if upper == "*":
         print("start at " + rng.getValue().lower() + " end at inf")
-        indexrange = pysharkbite.Range(rng.getValue().lower(),True,"\uffff",False)
+        if not  rng.getField() is None:
+          normalized_values = getTypes(lookupInformation,rng.getField(),rng.getValue().lower())
+          for normalized_value in normalized_values:
+            print("hmmm" + normalized_value)
+            indexrange = pysharkbite.Range(normalized_value,True,"\uffff",False)
+            indexScanner.addRange(indexrange)
+        else:
+          indexrange = pysharkbite.Range(rng.getValue().lower(),True,"\uffff",False)
+          indexScanner.addRange(indexrange)
       else:
         print("oh  " + fv.lower() + " to " + upper)
-        indexrange = pysharkbite.Range(fv.lower(),True,upper,True)
+        if not  rng.getField() is None:
+          normalized_values = getTypesWithUpper(lookupInformation,rng.getField(),fv.lower(),upper)
+          for normalized_value in normalized_values:
+            print("hmmm" + normalized_value[0])
+            indexrange = pysharkbite.Range(normalized_value[0],True,normalized_value[1]+"\uffff",False)
+            indexScanner.addRange(indexrange)
+        else:
+          indexrange = pysharkbite.Range(fv.lower(),True,upper,True)
+          indexScanner.addRange(indexrange)
     elif fv.endswith("*"):
       base = fv.replace('*', '')
-      indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+      if not  rng.getField() is None:
+        normalized_values = getTypes(lookupInformation,rng.getField(),fv.lower())
+        for normalized_value in normalized_values:
+          print("hmmm" + normalized_value)
+          indexrange = pysharkbite.Range(normalized_value,True,normalized_value+"\uffff",False)
+          indexScanner.addRange(indexrange)
+      else:
+        indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+        indexScanner.addRange(indexrange)
     else:
-      indexrange = pysharkbite.Range(rng.getValue().lower())
+      if  rng.getField() is None:
+        indexrange = pysharkbite.Range(rng.getValue().lower())
+        indexScanner.addRange(indexrange)
 
-    indexScanner.addRange(indexrange)
+    
     if not  rng.getField() is None:
-      print("Fetching a colunn")
+      print("Fetching a column")
+      normalized_values = getTypes(lookupInformation,rng.getField(),fv.lower())
+      for normalized_value in normalized_values:
+        print("hmmm" + normalized_value)
+        indexrange = pysharkbite.Range(normalized_value)
+        indexScanner.addRange(indexrange)
       indexScanner.fetchColumn(rng.getField().upper(),"")
     indexSet = indexScanner.getResultSet()
+    
     print("oh")
     try:
       prevfield = None
@@ -243,14 +352,60 @@ def lookupRanges(lookupInformation : LookupInformation, ranges : list, output ) 
       else:
         scnrs[count] = index_table_ops.createScanner(lookupInformation.getAuths(),1)
         fv = rng.getValue()
-        if fv.endswith("*"):
+        up = rng.upperbound()
+        if not up is None:
+          upper = str(up).lower()
+          fv = str(fv)
+          if upper == "*":
+            print("start at " + rng.getValue().lower() + " end at inf")
+            if not  rng.getField() is None:
+              normalized_values = getTypes(lookupInformation,rng.getField(),rng.getValue().lower())
+              for normalized_value in normalized_values:
+                print("hmmm" + normalized_value)
+                indexrange = pysharkbite.Range(normalized_value,True,"\uffff",False)
+                scnrs[count].addRange(indexrange)
+            else:
+              indexrange = pysharkbite.Range(rng.getValue().lower(),True,"\uffff",False)
+              scnrs[count].addRange(indexrange)
+          else:
+            print("oh  " + fv.lower() + " to " + upper)
+            if not  rng.getField() is None:
+              normalized_values = getTypesWithUpper(lookupInformation,rng.getField(),fv.lower(),upper)
+              for normalized_value in normalized_values:
+                print("hmmm" + normalized_value[0])
+                indexrange = pysharkbite.Range(normalized_value[0],True,normalized_value[1]+"\uffff",False)
+                scnrs[count].addRange(indexrange)
+            else:
+              indexrange = pysharkbite.Range(fv.lower(),True,upper,True)
+              scnrs[count].addRange(indexrange)
+        elif fv.endswith("*"):
           base = fv.replace('*', '')
-          indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+          if not  rng.getField() is None:
+            normalized_values = getTypes(lookupInformation,rng.getField(),fv.lower())
+            for normalized_value in normalized_values:
+              print("hmmm" + normalized_value)
+              indexrange = pysharkbite.Range(normalized_value,True,normalized_value+"\uffff",False)
+              scnrs[count].addRange(indexrange)
+          else:
+            indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+            scnrs[count].addRange(indexrange)
         else:
-          indexrange = pysharkbite.Range(fv.lower())
-        scnrs[count].addRange(indexrange)
-        if not  rng.getField() is None:
-          scnrs[count].fetchColumn(rng.getField().upper(),"")
+          if  rng.getField() is None:
+            indexrange = pysharkbite.Range(rng.getValue().lower())
+            scnrs[count].addRange(indexrange)
+    
+      if not  rng.getField() is None:
+        print("Fetching a column")
+        normalized_values = getTypes(lookupInformation,rng.getField(),fv.lower())
+        for normalized_value in normalized_values:
+          print("hmmm" + normalized_value)
+          indexrange = pysharkbite.Range(normalized_value)
+          scnrs[count].addRange(indexrange)
+        scnrs[count].fetchColumn(rng.getField().upper(),"")
+    
+        #scnrs[count].addRange(indexrange)
+        #if not  rng.getField() is None:
+        #  scnrs[count].fetchColumn(rng.getField().upper(),"")
         itrs[count]=scnrs[count].getResultSet()
         count=count+1
     try:
@@ -423,7 +578,7 @@ class IndexLookup(LuceneTreeVisitorV2):
         field = node.name
         if (isinstance(node.expr,LuceneRange)):
           childs = node.expr.children
-          return RangeLookup(field,childs[0],childs[1])
+          return RangeLookup(field,str(childs[0]),str(childs[1]))
         else:
           value = node.expr.value
           if value == "*":
@@ -711,7 +866,7 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
             print("nxt")
             if len( newauths.get_authorizations() ) > 0:
                 
-                print("Granted auths for " + AccumuloCluster.objects.first().user + " result " + str(secops.grantAuthorizations(newauths,AccumuloCluster.objects.first().user)))
+                print("Granted auths for " + AccumuloCluster.objects.first().user + " result " )
             else:
                 print("no auths to add")
         except:
@@ -724,6 +879,29 @@ class HomePageView(StrongholdPublicMixin,TemplateView):
       context = { "admin": request.user.is_superuser, "authenticated":True, 'userAuths': userAuths }
       return render(request,self.template_name,context)
 
+
+class TravelSearchView(StrongholdPublicMixin,TemplateView):
+    login_url = '/travel/login/'
+    redirect_field_name = 'login'
+    template_name = 'travel.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+      return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      userAuths = set()
+      try:
+        auths =  UserAuths.objects.get(name=request.user)
+        for authset in auths.authorizations.all():
+          if "TRVL" in authset.auth:
+            userAuths.add(authset)
+      except:
+        traceback.print_exc()
+        pass
+      context = { "admin": request.user.is_superuser, "authenticated":True, 'userAuths': userAuths }
+      return render(request,self.template_name,context)
 
 
 class UserAuthsView(TemplateView):
@@ -1313,13 +1491,16 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       if isProv is True and len(authlist) == 1:
         table="provenance"
         index_table="provenanceIndex"
+
+      metadata_table_ops = connector.tableOps("DatawaveMetadata")
+      
       table_operations = connector.tableOps(table)
 
       index_table_ops = connector.tableOps(index_table)
 
       #auths = pysharkbite.Authorizations()
       start=time.time()
-      indexLookupInformation=LookupInformation(index_table,auths,index_table_ops)
+      indexLookupInformation=LookupInformation(index_table,auths,index_table_ops,metadata_table_ops)
       shardLookupInformation=LookupInformation(table,auths,table_operations)
       wanted_items = list()
       tree = parser.parse(entry)
@@ -1358,3 +1539,111 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       authy= s.join(authlist)
       context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, "admin": request.user.is_superuser, "authenticated":True,'userAuths':userAuths,'query': entry}
       return render(request,'search_results.html',context)
+
+
+class TravelSearchResultsView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+    template_name = 'travel_results.html'
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+
+      entry = request.GET.get('q')
+      toll_entry = request.GET.get('toll')
+      if not toll_entry is None:
+        if len(entry) > 0:
+          entry = entry + " AND TOLL_ZIP:" + toll_entry
+        else:
+          entry = "TOLL_ZIP:" + toll_entry
+      selectedauths = request.GET.getlist('auths')
+      try:
+        skip = int(request.GET.get('s'))
+      except:
+        skip=0
+      field = request.GET.get('f')
+
+
+
+     # try:
+     #  LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
+
+     #  luceneparser = LuceneToJexlQueryParser()
+
+     #   node = luceneparser.parse(entry)
+
+     #   jexl = node.getOriginalQuery()
+     # except:
+     #   pass
+
+      indexLookup = 1
+
+      table = AccumuloCluster.objects.first().dataTable
+      index_table = AccumuloCluster.objects.first().indexTable
+      isProv=False
+      authlist=list()
+      auths = pysharkbite.Authorizations()
+      for auth in selectedauths:
+        if len(auth) > 0:
+          if auth == "PROV":
+            isProv=True
+          authlist.append(auth)
+          auths.addAuthorization(auth)
+      if isProv is True and len(authlist) == 1:
+        table="provenance"
+        index_table="provenanceIndex"
+
+      metadata_table_ops = connector.tableOps("DatawaveMetadata")
+      
+      table_operations = connector.tableOps(table)
+
+      index_table_ops = connector.tableOps(index_table)
+
+      #auths = pysharkbite.Authorizations()
+      start=time.time()
+      indexLookupInformation=LookupInformation(index_table,auths,index_table_ops,metadata_table_ops)
+      shardLookupInformation=LookupInformation(table,auths,table_operations)
+      wanted_items = list()
+      tree = parser.parse(entry)
+      tree = resolver(tree)
+      visitor = IndexLookup()
+      iterator = visitor.visit(tree)
+      if isinstance(iterator, RangeLookup):
+        rng = iterator
+        iterator = OrIterator()
+        iterator.addRange(rng)
+      docs = queue.SimpleQueue()
+      lookup(indexLookupInformation,shardLookupInformation,iterator,docs)
+
+      counts = 0
+      header = set()
+      while not docs.empty():
+        jsondoc = docs.get()
+        for key in jsondoc.keys():
+          if key != "ORIG_FILE" and key != "TERM_COUNT" and key != "RAW_FILE" and key != "shard" and key != "datatype" and key != "uid":
+            header.add( key )
+        wanted_items.append(jsondoc)
+        counts=counts+1
+      nxt=""
+      prv=""
+
+      userAuths = set()
+      try:
+        auths =  UserAuths.objects.get(name=request.user)
+        user_auths = auths.authorizations.all()
+        if not user_auths is None:
+          for authset in user_auths:
+            userAuths.add(authset)
+      except:
+        pass
+      s="|"
+      authy= s.join(authlist)
+      context={'header': header,'authstring':authy, 'selectedauths':selectedauths,'results': wanted_items, 'time': (time.time() - start), 'prv': prv, 'nxt': nxt,'field': field, "admin": request.user.is_superuser, "authenticated":True,'userAuths':userAuths,'query': entry}
+      return render(request,'travel_results.html',context)
