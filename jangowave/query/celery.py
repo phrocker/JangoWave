@@ -88,10 +88,10 @@ def pouplateEventCountMetadata():
         user = sharkbite.AuthInfo("root","secret", zoo_keeper.getInstanceId())
         connector = sharkbite.AccumuloConnector(user, zoo_keeper)
 
-        indexTableOps = connector.tableOps("DatawaveMetrics")
+        indexTableOps = connector.tableOps("datawave.metadata")
 
         auths = sharkbite.Authorizations()
-        auths.addAuthorization("MTRCS")
+        
 
         indexScanner = indexTableOps.createScanner(auths,100)
         start=time.time()
@@ -104,8 +104,8 @@ def pouplateEventCountMetadata():
         ## load the combiner from the file system and send it to accumulo
         with open('metricscombiner.py', 'r') as file:
           combinertxt = file.read()
-        combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-        indexScanner.addIterator(combiner)
+        #combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
+        #indexScanner.addIterator(combiner)
         indexSet = indexScanner.getResultSet()
 
         counts=0
@@ -350,7 +350,7 @@ def populateFieldMetadata():
       with open('countgatherer.py', 'r') as file:
         combinertxt = file.read()
       combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-      indexScanner.addIterator(combiner)
+      #indexScanner.addIterator(combiner)
       indexSet = indexScanner.getResultSet()
 
       counts=0
@@ -406,10 +406,10 @@ def buildon_startup():
         user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
         connector = sharkbite.AccumuloConnector(user, zk)
 
-        indexTableOps = connector.tableOps("DatawaveMetrics")
+        indexTableOps = connector.tableOps("datawave.metadata")
 
         auths = sharkbite.Authorizations()
-        auths.addAuthorization("MTRCS")
+        
 
         indexScanner = indexTableOps.createScanner(auths,100)
         start=time.time()
@@ -423,7 +423,7 @@ def buildon_startup():
         with open('metricscombiner.py', 'r') as file:
           combinertxt = file.read()
         combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-        indexScanner.addIterator(combiner)
+        #indexScanner.addIterator(combiner)
         indexSet = indexScanner.getResultSet()
 
         counts=0
@@ -471,7 +471,7 @@ def populateMetadata():
       with open('countgatherer.py', 'r') as file:
         combinertxt = file.read()
       combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-      indexScanner.addIterator(combiner)
+      #indexScanner.addIterator(combiner)
       indexSet = indexScanner.getResultSet()
       import json
       counts=0
