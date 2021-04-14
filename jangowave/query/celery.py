@@ -12,7 +12,7 @@ from celery.decorators import periodic_task
 from datetime import timedelta
 import Uid_pb2
 import EdgeData_pb2
-import WritableUtils
+import query.WritableUtils
 # set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'queryapp.settings')
 
@@ -330,7 +330,7 @@ def populateFieldMetadata():
       model = apps.get_model(app_label='query', model_name='AccumuloCluster')
       accumulo_cluster = model.objects.first()
       if accumulo_cluster is None:
-        return;
+        return
       zk = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
       user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = sharkbite.AccumuloConnector(user, zk)
@@ -377,7 +377,7 @@ def populateFieldMetadata():
              pass
       import json
       ret = json.dumps(mapping)
-      caches['metadata'].set("fieldchart",ret,3600*48)
+      caches['metadata'].set("fieldchart",ret,3600*1)
       return ret
 
 
@@ -486,24 +486,28 @@ def populateMetadata():
        if key.getColumnFamily() == "f":
          day = key.getColumnQualifier().split("\u0000")[1]
          dt = key.getColumnQualifier().split("\u0000")[0]
+         print ("got key")
+         binstream = WritableUtils.ByteArrayInputStream(value.get())
+         val = WritableUtils.readVLong(binstream)
+         print("got key value " + str(val))
          if day in mapping:
            if key.getRow() in mapping[day]:
             try:
-              mapping[day][key.getRow()] += int( value.get() )
+              mapping[day][key.getRow()] += val
             except:
               pass
            else:
             try:
-              mapping[day][key.getRow()] = int( value.get() )
+              mapping[day][key.getRow()] = val
             except:
               pass
          else:
            mapping[day]={}
            try:
-             mapping[day][key.getRow()] = int( value.get() )
+             mapping[day][key.getRow()] = val
            except:
              pass
-      caches['metadata'].set("field",json.dumps(mapping),3600*48)
+      caches['metadata'].set("field",json.dumps(mapping),3600*1)
       return json.dumps(mapping)
 
 
