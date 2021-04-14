@@ -367,8 +367,10 @@ def populateFieldMetadata():
             pass # mapping[key.getRow()].append(int( value.get() ))
          else:
            try:
+             print ("got key")
              binstream = WritableUtils.ByteArrayInputStream(value.get())
              val = WritableUtils.readVLong(binstream)
+             print("got key value " + str(val))
              mapping[key.getRow()] = list()
              mapping[key.getRow()].append(val)
            except:
