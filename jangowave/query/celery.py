@@ -12,6 +12,7 @@ from celery.decorators import periodic_task
 from datetime import timedelta
 import Uid_pb2
 import EdgeData_pb2
+import WritableUtils
 # set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'queryapp.settings')
 
@@ -223,7 +224,7 @@ def get_uploads():
   model = apps.get_model(app_label='query', model_name='AccumuloCluster')
   accumulo_cluster = model.objects.first()
   if accumulo_cluster is None:
-    return;
+    return
   zk = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
   user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
   connector = sharkbite.AccumuloConnector(user, zk)
@@ -366,9 +367,10 @@ def populateFieldMetadata():
             pass # mapping[key.getRow()].append(int( value.get() ))
          else:
            try:
-             val = int( value.get() )
+             binstream = WritableUtils.ByteArrayInputStream(value.get())
+             val = WritableUtils.readVLong(binstream)
              mapping[key.getRow()] = list()
-             mapping[key.getRow()].append(int( value.get() ))
+             mapping[key.getRow()].append(val)
            except:
              pass
       import json
