@@ -334,7 +334,7 @@ def populateFieldMetadata():
       user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = sharkbite.AccumuloConnector(user, zk)
 
-      indexTableOps = connector.tableOps("DatawaveMetadata")
+      indexTableOps = connector.tableOps("datawave.metadata")
 
       auths = sharkbite.Authorizations()
 
@@ -455,7 +455,7 @@ def populateMetadata():
       user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = sharkbite.AccumuloConnector(user, zk)
 
-      indexTableOps = connector.tableOps("DatawaveMetadata")
+      indexTableOps = connector.tableOps("datawave.metadata")
 
       auths = sharkbite.Authorizations()
 
