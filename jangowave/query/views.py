@@ -14,6 +14,7 @@ import json
 import requests
 from django.utils.decorators import method_decorator
 
+from decimal import Decimal
 from django.core import serializers
 from django.contrib.auth.decorators import user_passes_test, login_required
 from django.template import RequestContext
@@ -31,7 +32,7 @@ import multiprocessing
 from django.views.generic import TemplateView, ListView, View
 from stronghold.views import StrongholdPublicMixin
 import threading
-from .models import FileUpload, AccumuloCluster, Query, UserAuths, Auth, IngestConfiguration,  Result, ScanResult, EdgeQuery
+from .models import FileUpload, AccumuloCluster, Query, UserAuths, Auth, IngestConfiguration,  Result, ScanResult, EdgeQuery, DatawaveWebservers
 from .forms import DocumentForm
 from .rangebuilder import *
 from luqum.parser import lexer, parser, ParseError
@@ -40,6 +41,8 @@ from luqum.utils import UnknownOperationResolver, LuceneTreeVisitorV2
 from luqum.exceptions import OrAndAndOnSameLevel
 from luqum.tree import OrOperation, AndOperation, UnknownOperation
 from luqum.tree import Word  # noqa: F401
+
+from dwython import query
 
 from .celery import run_edge_query
 
@@ -58,7 +61,7 @@ faulthandler.enable()
 
 
 
-import pysharkbite
+import sharkbite
 
 class JSONResponseMixin(object):
     def render_to_response(self, context):
@@ -87,7 +90,7 @@ class ZkInstance(object):
         return ZkInstance._instance
 
     def __init__(self):
-        self.zk = pysharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
+        self.zk = sharkbite.ZookeeperInstance(AccumuloCluster.objects.first().instance, AccumuloCluster.objects.first().zookeeper, 1000, conf)
 
     def get(self):
         return self.zk
@@ -121,9 +124,9 @@ def lookupRange(lookupInformation : LookupInformation, rng : RangeLookup, output
 
     if fv.endswith("*"):
       base = fv.replace('*', '')
-      indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+      indexrange = sharkbite.Range(base,True,base+"\uffff",False)
     else:
-      indexrange = pysharkbite.Range(rng.getValue().lower())
+      indexrange = sharkbite.Range(rng.getValue().lower())
 
     indexScanner.addRange(indexrange)
     if not  rng.getField() is None:
@@ -213,9 +216,9 @@ def lookupRanges(lookupInformation : LookupInformation, ranges : list, output ) 
         fv = rng.getValue()
         if fv.endswith("*"):
           base = fv.replace('*', '')
-          indexrange = pysharkbite.Range(base,True,base+"\uffff",False)
+          indexrange = sharkbite.Range(base,True,base+"\uffff",False)
         else:
-          indexrange = pysharkbite.Range(fv.lower())
+          indexrange = sharkbite.Range(fv.lower())
         scnrs[count].addRange(indexrange)
         if not  rng.getField() is None:
           scnrs[count].fetchColumn(rng.getField().upper(),"")
@@ -458,15 +461,15 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
         if not docInfo is None:
           tableOps = lookupInformation.getTableOps()
           scanner = tableOps.createScanner(lookupInformation.getAuths(),5)
-          startKey = pysharkbite.Key()
-          endKey = pysharkbite.Key()
+          startKey = sharkbite.Key()
+          endKey = sharkbite.Key()
           startKey.setRow(docInfo.getShard())
           docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
           startKey.setColumnFamily(docid)
           endKey.setRow(docInfo.getShard())
           endKey.setColumnFamily(docid + "\xff")
           print("Searching for " + docInfo.getShard())
-          rng = pysharkbite.Range(startKey,True,endKey,True)
+          rng = sharkbite.Range(startKey,True,endKey,True)
 
           scanner.addRange(rng)
 
@@ -475,14 +478,14 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
           while rangecount < 10:
             try:
               docInfo = input.get(False)
-              startKey = pysharkbite.Key()
-              endKey = pysharkbite.Key()
+              startKey = sharkbite.Key()
+              endKey = sharkbite.Key()
               startKey.setRow(docInfo.getShard())
               docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
               startKey.setColumnFamily(docid)
               endKey.setRow(docInfo.getShard())
               endKey.setColumnFamily(docid + "\xff")
-              rng = pysharkbite.Range(startKey,True,endKey,True)
+              rng = sharkbite.Range(startKey,True,endKey,True)
               print("Searching for " + docInfo.getShard())
               scanner.addRange(rng)
               rangecount=rangecount+1
@@ -493,7 +496,7 @@ def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInfor
 
           with open('jsoncombiner.py', 'r') as file:
             combinertxt = file.read()
-            combiner=pysharkbite.PythonIterator("PythonCombiner",combinertxt,100)
+            combiner=sharkbite.PythonIterator("PythonCombiner",combinertxt,100)
             scanner.addIterator(combiner)
           try:
             count = count + scanDoc(scanner,outputQueue)
@@ -609,12 +612,12 @@ def lookup(indexLookupInformation : LookupInformation, docLookupInformation : Lo
     executor.shutdown()
 
 
-conf = pysharkbite.Configuration()
+conf = sharkbite.Configuration()
 
 conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
 
 
-#pysharkbite.LoggingConfiguration.enableTraceLogger()
+#sharkbite.LoggingConfiguration.enableTraceLogger()
 
 class HomePageView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -914,22 +917,22 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
       query = request.GET.get('query')
       authstring = request.GET.get('auths')
       url = "/search/?q=" + query
-      auths = pysharkbite.Authorizations()
+      auths = sharkbite.Authorizations()
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+      user = sharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = sharkbite.AccumuloConnector(user, ZkInstance().get())
       tableOps = connector.tableOps(AccumuloCluster.objects.first().dataTable)
       scanner = tableOps.createScanner(auths,1)
-      startKey = pysharkbite.Key(row=shard)
-      endKey = pysharkbite.Key(row=shard)
+      startKey = sharkbite.Key(row=shard)
+      endKey = sharkbite.Key(row=shard)
       docid = datatype + "\x00" + uid;
       startKey.setColumnFamily(docid)
       endKey.setColumnFamily(docid + "\xff")
-      rng = pysharkbite.Range(startKey,True,endKey,True)
+      rng = sharkbite.Range(startKey,True,endKey,True)
       scanner.addRange(rng)
       writer = tableOps.createWriter(auths,10)
-      deletes = pysharkbite.Mutation(shard)
+      deletes = sharkbite.Mutation(shard)
       for keyValue in scanner.getResultSet():
          key = keyValue.getKey()
          deletes.putDelete( key.getColumnFamily(), key.getColumnQualifier(), key.getColumnVisibility(), key.getTimestamp())
@@ -977,10 +980,10 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
           pass
         else:
           news[key] = value
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+      user = sharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = sharkbite.AccumuloConnector(user, ZkInstance().get())
 
-      auths = pysharkbite.Authorizations()
+      auths = sharkbite.Authorizations()
       #for auth in
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
@@ -990,7 +993,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       index_table_ops = connector.tableOps(index_table)
       writer = table_operations.createWriter(auths, 10)
       indexWriter = index_table_ops.createWriter(auths,5)
-      mutation = pysharkbite.Mutation(shard);
+      mutation = sharkbite.Mutation(shard);
       diff=0
       for key,value in news.items():
         if news[key] != originals[key]:
@@ -999,8 +1002,8 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
           mutation.putDelete(datatype + "\x00" + uid,key + "\x00" + originals[key],authstring,ts)
           ts = int( datetime.datetime.now().timestamp())*1000+100
           mutation.put(datatype + "\x00" + uid,key + "\x00" + news[key],authstring,ts)
-          originalIndexMutation = pysharkbite.Mutation(originals[key].lower())
-          indexMutation = pysharkbite.Mutation(news[key].lower())
+          originalIndexMutation = sharkbite.Mutation(originals[key].lower())
+          indexMutation = sharkbite.Mutation(news[key].lower())
           protobuf = Uid_pb2.List()
           protobuf.COUNT=1
           protobuf.IGNORE=False
@@ -1027,8 +1030,8 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       return HttpResponseRedirect(url)
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+      user = sharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
+      connector = sharkbite.AccumuloConnector(user, ZkInstance().get())
 
       table = AccumuloCluster.objects.first().dataTable
       authstring = request.GET.get('auths')
@@ -1039,7 +1042,7 @@ class MutateEventView(StrongholdPublicMixin,TemplateView):
       datatype = request.GET.get('dt')
       uid = request.GET.get('id')
       q = request.GET.get('query')
-      auths = pysharkbite.Authorizations()
+      auths = sharkbite.Authorizations()
       if not authstring is None and len(authstring) > 0:
         auths.addAuthorization(authstring)
       asyncQueue = queue.SimpleQueue()
@@ -1132,8 +1135,11 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
 
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
-      user = pysharkbite.AuthInfo(AccumuloCluster.objects.first().user,AccumuloCluster.objects.first().password, ZkInstance().get().getInstanceId())
-      connector = pysharkbite.AccumuloConnector(user, ZkInstance().get())
+      cert = DatawaveWebservers.objects.first().cert_file
+      key = DatawaveWebservers.objects.first().key_file
+      cacert = DatawaveWebservers.objects.first().ca_file
+      key_pass = DatawaveWebservers.objects.first().key_password
+      url = DatawaveWebservers.objects.first().url
 
       entry = request.GET.get('q')
       selectedauths = request.GET.getlist('auths')
@@ -1145,24 +1151,9 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
 
 
 
-     # try:
-     #  LuceneToJexlQueryParser  = jnius.autoclass('datawave.query.language.parser.jexl.LuceneToJexlQueryParser')
-
-     #  luceneparser = LuceneToJexlQueryParser()
-
-     #   node = luceneparser.parse(entry)
-
-     #   jexl = node.getOriginalQuery()
-     # except:
-     #   pass
-
-      indexLookup = 1
-
-      table = AccumuloCluster.objects.first().dataTable
-      index_table = AccumuloCluster.objects.first().indexTable
       isProv=False
       authlist=list()
-      auths = pysharkbite.Authorizations()
+      auths = sharkbite.Authorizations()
       for auth in selectedauths:
         if len(auth) > 0:
           if auth == "PROV":
@@ -1172,25 +1163,27 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       if isProv is True and len(authlist) == 1:
         table="provenance"
         index_table="provenanceIndex"
-      table_operations = connector.tableOps(table)
+     
 
-      index_table_ops = connector.tableOps(index_table)
-
-      #auths = pysharkbite.Authorizations()
       start=time.time()
-      indexLookupInformation=LookupInformation(index_table,auths,index_table_ops)
-      shardLookupInformation=LookupInformation(table,auths,table_operations)
       wanted_items = list()
-      tree = parser.parse(entry)
-      tree = resolver(tree)
-      visitor = IndexLookup()
-      iterator = visitor.visit(tree)
-      if isinstance(iterator, RangeLookup):
-        rng = iterator
-        iterator = OrIterator()
-        iterator.addRange(rng)
       docs = queue.SimpleQueue()
-      lookup(indexLookupInformation,shardLookupInformation,iterator,docs)
+
+      user_query = query.Query(query = entry,
+            cert_path = cert, key_path = key, ca_cert=cacert, key_password=key_pass, url=url ).with_syntax("LUCENE")
+      ands = []
+      result = user_query.create()
+      if result.events is not None:
+          for event in result.events:
+            #docs.put(event)
+            doc = dict()
+            for field in event['Fields']:
+              value = field['Value']
+              if value['type'] == 'xs:decimal':
+                doc[ field['name']] = float(value['value'])
+              else:
+                doc[ field['name']] = value['value']
+            docs.put(doc)
 
       counts = 0
       header = set()

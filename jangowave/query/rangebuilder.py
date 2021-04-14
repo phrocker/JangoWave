@@ -45,7 +45,7 @@ resolver = UnknownOperationResolver()
 
 
 
-import pysharkbite
+import sharkbite
 class LookupInformation(object):
     def __init__(self,lookupTable,auths, tableOps):
         self._lookupTable=lookupTable

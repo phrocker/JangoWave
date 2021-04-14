@@ -12,11 +12,11 @@ services:
     build:
       context: "."
       dockerfile: "Dockerfile.jangowave"
-    command: python3.7 manage.py runserver 0.0.0.0:8000
+    command: python3.7 manage.py runserver 0.0.0.0:8001
     volumes:
       - jango:/jangowave1
     ports:
-      - "8000:8000"
+      - "8001:8001"
       - "9997-9999"
       - "2181"
       - "8181"

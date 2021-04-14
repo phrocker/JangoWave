@@ -100,6 +100,20 @@ class AccumuloCluster(models.Model):
      def __str__(self):
       return self.instance + "@" + self.zookeeper
 
+class DatawaveWebservers(models.Model):
+     url = models.CharField(max_length=255)
+     cert_file = models.CharField(max_length=1024)
+     key_file = models.CharField(max_length=255)
+     key_password = models.CharField(max_length=255)
+     ca_file = models.CharField(max_length=255, blank=True, null=True)
+
+     def save(self, *args, **kwargs):
+        if not self.pk and DatawaveWebservers.objects.exists():
+        # if you'll not check for self.pk
+        # then error will also raised in update of exists model
+            raise ValidationError('There is can be only one DatawaveWebservers instance')
+        return super(DatawaveWebservers, self).save(*args, **kwargs)
+
 class Query(models.Model):
     name = models.CharField(max_length=2550)
 

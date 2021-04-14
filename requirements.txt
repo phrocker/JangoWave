@@ -13,3 +13,4 @@ luqum
 nipyapi
 django-extensions
 django_redis
+dwython
