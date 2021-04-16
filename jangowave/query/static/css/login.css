@@ -1,7 +1,7 @@
 @import url(https://fonts.googleapis.com/css?family=Roboto:300);
 
 .login-page {
-  width: 360px;
+  width: 560px;
   padding: 8% 0 0;
   margin: auto;
 }
@@ -9,7 +9,7 @@
   position: relative;
   z-index: 1;
   background: #FFFFFF;
-  max-width: 360px;
+  max-width: 540px;
   margin: 0 auto 100px;
   padding: 45px;
   text-align: center;
@@ -23,6 +23,7 @@
   border: 0;
   margin: 0 0 15px;
   padding: 15px;
+  width: 440px;
   box-sizing: border-box;
   font-size: 14px;
 }
@@ -31,7 +32,7 @@
   text-transform: uppercase;
   outline: 0;
   background: #4CAF50;
-  width: 100%;
+  width: 10px;
   border: 0;
   padding: 15px;
   color: #FFFFFF;
@@ -58,7 +59,7 @@
 .container {
   position: relative;
   z-index: 1;
-  max-width: 300px;
+  max-width: 500px;
   margin: 0 auto;
 }
 .container:before, .container:after {

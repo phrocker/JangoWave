@@ -25,7 +25,7 @@ SECRET_KEY = 'nti&=qe0wwhdq^rubdspafqh78a9@mrpg+tr6)ytua=v968qkw5-'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["::1","localhost","192.168.1.196"]
+ALLOWED_HOSTS = ["::1","localhost","192.168.1.196", "10.1.0.4"]
 
 
 # Application definition

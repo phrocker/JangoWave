@@ -1,13 +1,14 @@
 # cities/urls.py
 from django.urls import path
 from django.urls import path, include # new
-from .views import MutateEventView, FileUploadView, HomePageView, SearchResultsView, EdgeQueryResults,EdgeQueryView, MetadataView, FieldMetadataView,MetadataChartView,MetadataEventCountsView, FileStatusView,DeleteEventView
+from .views import MutateEventView, FileUploadView, HomePageView, SearchResultsView, EdgeQueryResults,EdgeQueryView, MetadataView, FieldMetadataView,MetadataChartView,MetadataEventCountsView, FileStatusView,DeleteEventView, FieldExpansionView
 
 urlpatterns = [
     path('mutate/', MutateEventView.as_view(), name='mutate_page'),
     path('delete', DeleteEventView.as_view(), name='mutate_page'),
     path('search/', SearchResultsView.as_view(), name='search_results'),
     path('fieldmetadata/', FieldMetadataView.as_view(), name='fieldmetadata'),
+    path('fieldmetadata/field', FieldExpansionView.as_view(), name='fieldmetadata'),
     path('chartdata', MetadataChartView.as_view(), name='chartdata'),
     path('eventcountdata', MetadataEventCountsView.as_view(), name='eventcountdata'),
     path('data/', MetadataView.as_view(), name='data'),
