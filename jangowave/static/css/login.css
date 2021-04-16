@@ -1,7 +1,7 @@
 @import url(https://fonts.googleapis.com/css?family=Roboto:300);
 
 .login-page {
-  width: 360px;
+  width: 560px;
   padding: 8% 0 0;
   margin: auto;
 }
@@ -9,7 +9,7 @@
   position: relative;
   z-index: 1;
   background: #FFFFFF;
-  max-width: 360px;
+  max-width: 560px;
   margin: 0 auto 100px;
   padding: 45px;
   text-align: center;
@@ -58,7 +58,7 @@
 .container {
   position: relative;
   z-index: 1;
-  max-width: 300px;
+  max-width: 500px;
   margin: 0 auto;
 }
 .container:before, .container:after {

@@ -45,6 +45,7 @@ from luqum.tree import Word  # noqa: F401
 from dwython import query
 
 from .celery import run_edge_query
+from .celery import populateFieldMetadata, populateMetadata
 
 from collections import deque
 import queue
@@ -98,6 +99,25 @@ class ZkInstance(object):
 conf = sharkbite.Configuration()
 
 conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
+def runningWorkers(workers):
+  for worker in workers:
+    if not worker.done():
+      return True
+  return False
+
+class CancellationToken:
+   def __init__(self):
+       self._is_cancelled = threading.Event()
+       self._is_cancelled.clear()
+
+   def cancel(self):
+       self._is_cancelled.set()
+
+   def running(self):
+       return self._is_cancelled.is_set() == False
+
+   def cancelled(self):
+       return self._is_cancelled.is_set()
 
 
 #sharkbite.LoggingConfiguration.enableTraceLogger()
@@ -336,7 +356,9 @@ class MetadataChartView(JSONResponseMixin,TemplateView):
       mapping = {}
       if caches['metadata'].get("fieldchart") is None:
         mapping = {}
+        print("no field chart")
       else:
+        print("got a field chart")
         mapping = json.loads(caches['metadata'].get("fieldchart") )
 
       arr = [None] * len(mapping.keys())
@@ -374,13 +396,46 @@ class FieldMetadataView(StrongholdPublicMixin,TemplateView):
     def get(self, request, *args, **kwargs):
       metadata = "{}"
       if caches['metadata'].get("field") is None:
-        metadata = "{}"
+        print("got none")
+        populateMetadata()
+        if caches['metadata'].get("field") is not None:
+          metadata = caches['metadata'].get("field")
       else:
+        
         metadata = caches['metadata'].get("field")
+        print("got some")
+        if metadata is None or (isinstance(metadata, str) and (len(metadata)==0 or metadata=="{}" )):
+          print("deleting " + metadata)
+          caches['metadata'].delete('field')
+          populateFieldMetadata()
 
       context={ "admin": request.user.is_superuser, "authenticated":True, 'metadata': json.loads(metadata) }
       return render(request,'fieldmetadata.html',context)
 
+class FieldExpansionView(StrongholdPublicMixin,TemplateView):
+    login_url = '/accounts/login/'
+    redirect_field_name = 'login'
+    model = Query
+
+    @method_decorator(login_required)
+    def dispatch(self, *args, **kwargs):
+        return super(TemplateView, self).dispatch(*args, **kwargs)
+
+    @method_decorator(login_required)
+    def get(self, request, *args, **kwargs):
+      metadata = []
+      fieldNames = set()
+      field_name_query = request.GET.get('query')
+      if (caches['metadata'].get("field")):
+        field_obj = json.loads(caches['metadata'].get("field"))
+        for key in field_obj:
+          val = field_obj[key]
+          for key in val:
+            if not field_name_query or key.startswith(field_name_query):
+              fieldNames.add(key)
+      for field_name in fieldNames:
+        metadata.append(field_name)
+      return JsonResponse(metadata, safe=False)
 
 class DeleteEventView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -425,6 +480,116 @@ class DeleteEventView(StrongholdPublicMixin,TemplateView):
       for auth in authstring.split("|"):
         url = url + "&auths=" + auth
       return HttpResponseRedirect(url)
+
+
+def getDocuments(cancellationtoken : CancellationToken, name : int , lookupInformation : LookupInformation,input : queue.Queue, outputQueue : queue.Queue):
+  count=0
+  while cancellationtoken.running():
+    docInfo = None
+    try:
+        try:
+            if input.empty():
+              pass
+            else:
+              docInfo = input.get(timeout=1)
+        except:
+            pass
+            # Handle empty queue here
+        if not docInfo is None:
+          tableOps = lookupInformation.getTableOps()
+          scanner = tableOps.createScanner(lookupInformation.getAuths(),5)
+          startKey = pysharkbite.Key()
+          endKey = pysharkbite.Key()
+          startKey.setRow(docInfo.getShard())
+          docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+          startKey.setColumnFamily(docid)
+          endKey.setRow(docInfo.getShard())
+          endKey.setColumnFamily(docid + "\xff")
+          print("Searching for " + docInfo.getShard())
+          rng = pysharkbite.Range(startKey,True,endKey,True)
+
+          scanner.addRange(rng)
+
+          rangecount=1
+
+          while rangecount < 10:
+            try:
+              docInfo = input.get(False)
+              startKey = pysharkbite.Key()
+              endKey = pysharkbite.Key()
+              startKey.setRow(docInfo.getShard())
+              docid = docInfo.getDataType() + "\x00" + docInfo.getDocId();
+              startKey.setColumnFamily(docid)
+              endKey.setRow(docInfo.getShard())
+              endKey.setColumnFamily(docid + "\xff")
+              rng = pysharkbite.Range(startKey,True,endKey,True)
+              print("Searching for " + docInfo.getShard())
+              scanner.addRange(rng)
+              rangecount=rangecount+1
+
+            except:
+              rangecount=11
+
+
+          with open('jsoncombiner.py', 'r') as file:
+            combinertxt = file.read()
+            combiner=pysharkbite.PythonIterator("PythonCombiner",combinertxt,100)
+            scanner.addIterator(combiner)
+          try:
+            count = count + scanDoc(scanner,outputQueue)
+          except:
+            pass
+        else:
+          time.sleep(0.5)
+
+    except:
+      e = sys.exc_info()[0]
+  return True
+
+def getDoc(docLookupInformation : LookupInformation,asyncQueue : queue.Queue, documents : queue.Queue):
+
+    intermediateQueue = queue.Queue()
+
+    isrunning = CancellationToken()
+    workers = list()
+
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(getDocuments,isrunning,0,docLookupInformation,asyncQueue,intermediateQueue)
+    workers.append(future)
+
+    counts = 0
+    while counts < 10 and (runningWorkers(workers) or not asyncQueue.empty()):
+          if asyncQueue.empty():
+             isrunning.cancel()
+          try:
+           if not intermediateQueue.empty():
+            documents.put(intermediateQueue.get())
+            counts=counts+1
+           else:
+            time.sleep(1)
+          except Queue.Empty:
+            pass
+
+    while counts < 10 and not intermediateQueue.empty():
+      try:
+         if not intermediateQueue.empty():
+          doc = intermediateQueue.get()
+
+          documents.put(doc)
+          counts=counts+1
+         else:
+          time.sleep(1)
+      except :
+          pass
+
+
+    isrunning.cancel()
+
+    for worker in workers:
+      worker.cancel()
+
+    executor.shutdown()
 
 class MutateEventView(StrongholdPublicMixin,TemplateView):
     login_url = '/accounts/login/'
@@ -616,6 +781,22 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
     def dispatch(self, *args, **kwargs):
         return super(TemplateView, self).dispatch(*args, **kwargs)
 
+    def putData(self, doc, field, value, type):
+      newvalue = value
+      if type == 'xs:decimal':
+          newvalue = float(value)
+      if field in doc.keys():
+        if not isinstance(doc[field], list):
+          newvalue_list = list()
+          newvalue_list.append(doc[field])
+        else:
+          newvalue_list = doc[field]
+        newvalue_list.append(newvalue)
+        doc[field] = newvalue_list
+      else:
+        doc[field] = newvalue
+
+      
     @method_decorator(login_required)
     def get(self, request, *args, **kwargs):
       cert = DatawaveWebservers.objects.first().cert_file
@@ -631,6 +812,9 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       except:
         skip=0
       field = request.GET.get('f')
+      syntax = request.GET.get('syntax')
+      if not syntax:
+        syntax = "LUCENE"
 
 
 
@@ -651,9 +835,9 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
       start=time.time()
       wanted_items = list()
       docs = queue.Queue()
-
+      print("syntax is " + syntax)
       user_query = query.Query(query = entry,
-            cert_path = cert, key_path = key, ca_cert=cacert, key_password=key_pass, url=url ).with_syntax("LUCENE")
+            cert_path = cert, key_path = key, ca_cert=cacert, key_password=key_pass, url=url ).with_syntax(syntax)
       ands = []
       result = user_query.create()
       if result.events is not None:
@@ -662,10 +846,7 @@ class SearchResultsView(StrongholdPublicMixin,TemplateView):
             doc = dict()
             for field in event['Fields']:
               value = field['Value']
-              if value['type'] == 'xs:decimal':
-                doc[ field['name']] = float(value['value'])
-              else:
-                doc[ field['name']] = value['value']
+              self.putData(doc,field['name'],value['value'],value['type'])
             docs.put(doc)
 
       counts = 0

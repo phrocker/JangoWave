@@ -13,6 +13,7 @@ from datetime import timedelta
 import Uid_pb2
 import EdgeData_pb2
 import query.WritableUtils
+import traceback
 # set the default Django settings module for the 'celery' program.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'queryapp.settings')
 
@@ -61,71 +62,6 @@ class ZkInstance(object):
     def get(self):
         return self.zoo_keeper
 
-@periodic_task(run_every=timedelta(minutes=45))
-def pouplateEventCountMetadata():
-      import sharkbite
-      import time
-      conf = sharkbite.Configuration()
-      conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
-      model = apps.get_model(app_label='query', model_name='AccumuloCluster')
-      accumulo_cluster = model.objects.first()
-      if accumulo_cluster is None:
-        return;
-      zoo_keeper = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
-      user = sharkbite.AuthInfo("root","secret", zoo_keeper.getInstanceId())
-      connector = sharkbite.AccumuloConnector(user, zoo_keeper)
-      queryRanges = list()
-      #last 15 days
-      for dateinrange in getDateRange(-15):
-        shardbegin = dateinrange.strftime("%Y%m%d")
-        if caches['eventcount'].get(shardbegin) is None or caches['eventcount'].get(shardbegin)==0:
-          queryRanges.append(shardbegin)
-        else:
-          pass # don't add to range
-
-      if len(queryRanges) > 0:
-        ## all is cached
-
-        user = sharkbite.AuthInfo("root","secret", zoo_keeper.getInstanceId())
-        connector = sharkbite.AccumuloConnector(user, zoo_keeper)
-
-        indexTableOps = connector.tableOps("datawave.metadata")
-
-        auths = sharkbite.Authorizations()
-        
-
-        indexScanner = indexTableOps.createScanner(auths,100)
-        start=time.time()
-        for dt in queryRanges:
-          indexrange = sharkbite.Range(dt,True,dt+"\uffff",False)
-          indexScanner.addRange(indexrange)
-        indexScanner.fetchColumn("EVENT_COUNT","")
-
-        combinertxt=""
-        ## load the combiner from the file system and send it to accumulo
-        with open('metricscombiner.py', 'r') as file:
-          combinertxt = file.read()
-        #combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-        #indexScanner.addIterator(combiner)
-        indexSet = indexScanner.getResultSet()
-
-        counts=0
-        mapping={}
-        try:
-          for indexKeyValue in indexSet:
-            value = indexKeyValue.getValue()
-            key = indexKeyValue.getKey()
-            if key.getColumnFamily() == "EVENT_COUNT":
-              dt = key.getRow().split("_")[0]
-              if dt in mapping:
-                  mapping[dt] += int(value.get())
-              else:
-                mapping[dt] = int(value.get())
-          arr = [None] * len(mapping.keys())
-          for field in mapping:
-            caches['eventcount'].set(field,str(mapping[field]),3600*48)
-        except:
-          pass
 
 @shared_task
 def run_edge_query(query_id):
@@ -264,10 +200,8 @@ def check():
         conf.set ("FILE_SYSTEM_ROOT", "/accumulo");
         model = apps.get_model(app_label='query', model_name='AccumuloCluster')
         accumulo_cluster = model.objects.first()
-        print("Checking " + str(obj.uuid))
         if accumulo_cluster is None:
           return;
-        print("Checking " + str(obj.uuid))
         zk = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
         user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
         connector = sharkbite.AccumuloConnector(user, zk)
@@ -320,9 +254,13 @@ def check():
         indexScanner.close()
 
 @periodic_task(run_every=timedelta(seconds=60))
+@shared_task
 def populateFieldMetadata():
-      if not caches['metadata'].get("fieldchart") is None:
-        return caches['metadata'].get("fieldchart")
+      print("322")
+      metadata = caches['metadata'].get("fieldchart")
+      if not metadata is None and not (isinstance(metadata, str) and (len(metadata)==0 or metadata=="{}" )):
+        print("returning " + metadata)
+        return metadata
       import time
       import sharkbite
       conf = sharkbite.Configuration()
@@ -331,6 +269,7 @@ def populateFieldMetadata():
       accumulo_cluster = model.objects.first()
       if accumulo_cluster is None:
         return
+        print("270")
       zk = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
       user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = sharkbite.AccumuloConnector(user, zk)
@@ -347,11 +286,7 @@ def populateFieldMetadata():
       indexScanner.fetchColumn("f","")
 
       combinertxt=""
-        ## load the combiner from the file system and send it to accumulo
-      with open('countgatherer.py', 'r') as file:
-        combinertxt = file.read()
-      combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-      #indexScanner.addIterator(combiner)
+      print("287")
       indexSet = indexScanner.getResultSet()
 
       counts=0
@@ -367,13 +302,13 @@ def populateFieldMetadata():
             pass # mapping[key.getRow()].append(int( value.get() ))
          else:
            try:
-             print ("got key")
-             binstream = WritableUtils.ByteArrayInputStream(value.get())
-             val = WritableUtils.readVLong(binstream)
-             print("got key value " + str(val))
+
+             binstream = query.WritableUtils.DataInputStream( query.WritableUtils.ByteArrayInputStream(value.get_bytes()) )
+             val = query.WritableUtils.readVLong(binstream)
              mapping[key.getRow()] = list()
              mapping[key.getRow()].append(val)
            except:
+             traceback.print_exc()
              pass
       import json
       ret = json.dumps(mapping)
@@ -420,7 +355,7 @@ def buildon_startup():
         for dt in queryRanges:
           indexrange = sharkbite.Range(dt,True,dt+"\uffff",False)
           indexScanner.addRange(indexrange)
-        indexScanner.fetchColumn("EVENT_COUNT","")
+        indexScanner.fetchColumn("e","")
 
         combinertxt=""
         ## load the combiner from the file system and send it to accumulo
@@ -435,17 +370,20 @@ def buildon_startup():
         for indexKeyValue in indexSet:
          value = indexKeyValue.getValue()
          key = indexKeyValue.getKey()
-         if key.getColumnFamily() == "EVENT_COUNT":
+         if key.getColumnFamily() == "e":
            dt = key.getRow().split("_")[0]
+           binstream = query.WritableUtils.DataInputStream( query.WritableUtils.ByteArrayInputStream(value.get_bytes()) )
+           val = query.WritableUtils.readVLong(binstream)  
            if dt in mapping:
-              mapping[dt] += int(value.get())
+              mapping[dt] += val
            else:
-             mapping[dt] = int(value.get())
+             mapping[dt] = val
         arr = [None] * len(mapping.keys())
         for field in mapping:
           caches['eventcount'].set(field,str(mapping[field]),3600*48)
 
-@periodic_task(run_every=timedelta(minutes=5))
+@periodic_task(run_every=timedelta(minutes=10))
+@shared_task
 def populateMetadata():
       import sharkbite      
       conf = sharkbite.Configuration()
@@ -454,7 +392,7 @@ def populateMetadata():
       model = apps.get_model(app_label='query', model_name='AccumuloCluster')
       accumulo_cluster = model.objects.first()
       if accumulo_cluster is None:
-        return;
+        return
       zk = sharkbite.ZookeeperInstance(accumulo_cluster.instance, accumulo_cluster.zookeeper, 1000, conf)
       user = sharkbite.AuthInfo("root","secret", zk.getInstanceId())
       connector = sharkbite.AccumuloConnector(user, zk)
@@ -471,11 +409,6 @@ def populateMetadata():
       indexScanner.fetchColumn("f","")
 
       combinertxt=""
-        ## load the combiner from the file system and send it to accumulo
-      with open('countgatherer.py', 'r') as file:
-        combinertxt = file.read()
-      combiner=sharkbite.PythonIterator("MetadataCounter",combinertxt,200)
-      #indexScanner.addIterator(combiner)
       indexSet = indexScanner.getResultSet()
       import json
       counts=0
@@ -486,10 +419,8 @@ def populateMetadata():
        if key.getColumnFamily() == "f":
          day = key.getColumnQualifier().split("\u0000")[1]
          dt = key.getColumnQualifier().split("\u0000")[0]
-         print ("got key")
-         binstream = WritableUtils.ByteArrayInputStream(value.get())
-         val = WritableUtils.readVLong(binstream)
-         print("got key value " + str(val))
+         binstream = query.WritableUtils.DataInputStream( query.WritableUtils.ByteArrayInputStream(value.get_bytes()) )
+         val = query.WritableUtils.readVLong(binstream)
          if day in mapping:
            if key.getRow() in mapping[day]:
             try:

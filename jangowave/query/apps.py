@@ -1,14 +1,12 @@
 from django.apps import AppConfig
-from .celery import pouplateEventCountMetadata, populateFieldMetadata,populateMetadata
+from .celery import populateFieldMetadata, populateFieldMetadata,populateMetadata
 
 class QueryConfig(AppConfig):
     name = 'query'
     def ready(self):
-      print("sleeping")
      # populateMetadata.delay() 
-      print("get field")  
       #populateFieldMetadata.delay()
-      #pouplateEventCountMetadata.delay()
+      populateFieldMetadata.delay()
       #import time
       #time.sleep(2)  
       # importing model classes

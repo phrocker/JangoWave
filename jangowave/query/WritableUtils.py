@@ -194,7 +194,7 @@ def readVLong(data_input):
         return first_byte
 
     i = 0
-    for idx in xrange(length - 1):
+    for idx in range(length - 1):
         b = data_input.readUByte()
         i = i << 8
         i = i | b

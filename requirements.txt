@@ -9,7 +9,7 @@ click-didyoumean==0.0.3
 click-plugins==1.1.1
 click-repl==0.1.6
 cryptography==3.4.7
-Django==2.2.10
+Django==2.2.*
 django-adminlte3==0.1.6
 django-extensions==3.1.2
 django-redis==4.12.1
@@ -21,7 +21,6 @@ elasticsearch==7.12.0
 elasticsearch-dsl==7.3.0
 future==0.18.2
 google-cloud==0.34.0
-idna==3.1
 kombu==4.6.11
 luqum==0.9.0
 lxml==4.6.3
