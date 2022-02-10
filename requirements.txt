@@ -2,7 +2,7 @@ celery
 protobuf
 sharkbite
 google-cloud
-django==2.2.10
+django==2.2.27
 pyparsing
 sortedcontainers
 #pyjnius
